@@ -2,7 +2,7 @@
 
 > **Draft, security lane.** Written by an agent from the PRD and repo rules. The author explains every line; the other developer reads every line (`docs/workflow/team-and-agents.md`, security lane checklist). Items marked **[review]** are security parameters a human must confirm.
 
-Living document: any PR that changes the module's behaviour updates it in the same PR. This spec is longer than the 1 to 2 pages of the template (PRD Appendix D) because the roadmap assigns sessions, RBAC, TOTP, login throttling and envelope encryption to this one module. The schema list in section "API" moves into `openapi.yaml` in phase 2 of the contract PR and is replaced there by a link.
+Living document: any PR that changes the module's behaviour updates it in the same PR. This spec is longer than the 1 to 2 pages of the template (PRD Appendix D) because the roadmap assigns sessions, RBAC, TOTP, login throttling and envelope encryption to this one module. Schemas, statuses and examples live in [`openapi.yaml`](../../openapi.yaml) (tag `auth`); section "API" names the operations and links there.
 
 - **Requirements:** FR-33, NFR-05, NFR-17. The module also provides the step-up primitive that `ppid` uses for NFR-08 (NFR-08 itself stays in `ppid`).
 - **Depends on open questions:**
@@ -191,13 +191,16 @@ The BE lane fills the runbook sections "Add an admin", "TOTP break-glass" and "K
 
 ## API
 
-Operations live in `openapi.yaml` (tag `auth`) once phase 2 lands. This table only names them. All paths are under `/api/v1/admin/auth`. Every operation has `default: Problem`. The Auth column uses: `public`; `any session` (including pending stages); a stage name; `perm <area>.<level>`; `+step-up`. The 401 Problem detail is `Sesi tidak valid atau telah berakhir.`; the 403 detail is `Akses ditolak.`
+Operations live in [`openapi.yaml`](../../openapi.yaml) (tag `auth`), which is authoritative for statuses, schemas and examples. This table names them and their own outcomes. In addition, every operation except `getSession` can answer 403 (`Forbidden`: wrong stage, missing permission, or a cross-origin request), and `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` answer 400 for a `userId` that is not an integer or is below 1. All paths are under `/api/v1/admin/auth`. Every operation has `default: Problem`. The Auth column uses: `public`; `any session` (including pending stages); a stage name; `perm <area>.<level>`; `+step-up`. The 401 Problem detail is `Sesi tidak valid atau telah berakhir.`; the 403 detail is `Akses ditolak.`
 
 Contract conventions **[agent call]**:
 - 401, 403 and 429 are listed explicitly on every operation that can return them, as `$ref` to new shared `components/responses` `Unauthorized`, `Forbidden` and `TooManyRequests` (the last carries the `RetryAfter` header). The server produces them from sentinel errors in `authorize`, not from handler return values (see "Authorization failures").
 - `components/securitySchemes.cookieAuth`: `apiKey` in a cookie named `__Host-bpl_session` (the production name; the description states the dev name `bpl_session`). Every operation has `security: [{cookieAuth: []}]` except `createSession`, which has `security: []`. `createSession` and `createTotpVerification` document the `Set-Cookie` response header.
 - `createSession` and `getSession` 200 carry one named example per `SessionStage` value, so the FE fixtures cover all four stages.
-- The Problem schema has only `title`, `status`, `detail`. This module does not add fields: the FE tells errors apart by status plus the exact Indonesian `detail` text listed here. Whether Problem should gain a machine-readable `code` is a human decision for the contract review.
+- The Problem schema has only `title`, `status`, `detail`. This module does not add fields: the FE tells errors apart by status plus the exact Indonesian `detail` text listed here. Decided at contract review (2026-11-08): Problem gets no machine-readable `code`.
+- Problem examples carry `detail` only where this spec pins the text; the other examples have `title` and `status` only.
+- `Set-Cookie` and `Retry-After` generate as optional pointer fields (`Headers.SetCookie *string`, `Headers.RetryAfter *int`). Handlers leave `SetCookie` nil: scs writes the session cookie, and a second header would duplicate it.
+- Shared components besides those above: `parameters/UserId`, `headers/SetSessionCookie`, `responses/InvalidUserId`, `responses/UserNotFound`, `responses/OwnAccount`, and the named examples `SessionAuthenticated`, `SessionTotpRequired`, `SessionPasswordChangeRequired` and `SessionTotpEnrollmentRequired`.
 
 | operationId | Method and path | Auth | Responses |
 |---|---|---|---|
@@ -217,21 +220,12 @@ Contract conventions **[agent call]**:
 | `createPasswordReset` | `POST /users/{userId}/password-reset` | perm `users.manage` +step-up | 200 `TemporaryPassword`; 403; 404; 409 (own id) |
 | `deleteUserTotp` | `DELETE /users/{userId}/totp` | perm `users.manage` +step-up | 204; 403; 404; 409 (own id) |
 
-The contract PR adds `components/parameters/Page` and `PageSize` (per `module-contract` section 2), `components/headers/RetryAfter` (integer seconds) and the three shared responses above. `listUsers` defaults: page 1, pageSize 10, maximum pageSize 50. `userId` is `int64`, minimum 1.
+`openapi.yaml` has `components/parameters/Page` and `PageSize` (per `module-contract` section 2), `components/headers/RetryAfter` (integer seconds) and the three shared responses above. `listUsers` defaults: page 1, pageSize 10, maximum pageSize 50. `userId` is `int64`, minimum 1.
 
-Schemas for the contract PR (moved into `openapi.yaml` and replaced by a link in that PR):
-- `Role` enum (5 slugs); `PermissionArea` enum (9); `PermissionLevel` enum `[view, manage]`; `SessionStage` enum (4).
-- `Permission {area, level}`.
-- `Credentials {username, password}`.
-- `SessionState {stage, user: SessionUser, permissions: Permission[], totpEnrolled: boolean, stepUpExpiresAt: date-time or null}`. `permissions` is empty unless the stage is `authenticated`. `SessionUser {id, username, fullName, roles}`.
-- `TotpVerification {code?: 6-digit string, recoveryCode?: string}`: two optional fields (no `oneOf`, to keep the generated Go and TypeScript types plain); the handler answers 400 unless exactly one is present. `TotpCode {code}` is used by `createStepUp` and `updateTotpEnrollment`. `createRecoveryCodes` takes no request body: the step-up rule is its check. **[agent call]**
-- `TotpEnrollment {secret: base32, otpauthUri, qrCodePng: base64 PNG}`; `RecoveryCodes {codes: string[10]}`.
-- `PasswordChange {currentPassword, newPassword}`; `StepUp {expiresAt}`.
-- `User {id, username, fullName, roles, active, totpEnrolled, lastLoginAt (date-time or null), createdAt}`.
-- `UserPage {items, page, pageSize, total}`.
-- `UserCreate {username, fullName, roles (min 1, unique)}`; `UserUpdate {fullName, roles (min 1), active}`.
-- `UserCreated {user, temporaryPassword}`; `TemporaryPassword {temporaryPassword}`.
-- Field constraints (the generated server does not enforce ranges, so handlers re-check them): `username` pattern `^[a-z0-9._-]{3,32}$`; `password` and `newPassword` 12 to 128 characters; `code` pattern `^[0-9]{6}$`; `recoveryCode` max 32 characters; `fullName` 1 to 100 characters; `roles` `minItems: 1`, `uniqueItems: true`, items `Role`; `qrCodePng` is `format: byte`. `createSession` takes `Credentials` with `password` max 128 and any `username` string up to 64 characters: a malformed login answers 401, not 400, so it reveals nothing; 400 is only for an unparsable body. **[agent call]**
+Schemas are in `openapi.yaml` `components/schemas`: `Role`, `PermissionArea`, `PermissionLevel`, `SessionStage`, `Permission`, `Credentials`, `SessionUser`, `SessionState`, `TotpVerification`, `TotpCode`, `TotpEnrollment`, `RecoveryCodes`, `PasswordChange`, `StepUp`, `User`, `UserPage`, `UserCreate`, `UserUpdate`, `UserCreated`, `TemporaryPassword`. Rules the schemas cannot express **[agent call]**:
+- The generated server checks types only, not `pattern`, `minLength`, `maxLength`, `minItems`, `uniqueItems`, `minimum` or `maximum`; handlers re-check every constraint in the contract and answer 400.
+- `TotpVerification` has two optional fields (no `oneOf`, to keep the generated Go and TypeScript types plain); the handler answers 400 unless exactly one is present. `TotpCode {code}` is used by `createStepUp` and `updateTotpEnrollment`. `createRecoveryCodes` takes no request body: the step-up rule is its check.
+- `createSession` takes `Credentials` with `password` max 128 and any `username` string up to 64 characters: a malformed login answers 401, not 400, so it reveals nothing; 400 is only for an unparsable body.
 
 ## Interface
 
@@ -339,6 +333,7 @@ Written before the BE and FE lanes start. Each lane PR fills the "Test name" col
 | A44 | `createSession` with an unparsable body gives 400; a username that does not match the pattern gives the same 401 as a wrong password and counts against the IP key only | `api` | |
 | A45 | A cross-origin POST without a session gives 403, not 401 (middleware order) | `api` | |
 | A46 | `GET /api/v1/health` with an invalid or foreign session cookie gives 200 and makes no session query | `api` | |
+| A47 | `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` give 400 for `userId` `abc` and `0` | `api` | |
 | W1 | The `(panel)` guard maps 401 to a redirect to `/admin/masuk?kembali=...`, and each pending stage to its page (injected fetch, fixtures typed from the contract examples) | `web-load` | |
 | W2 | A stage page with a mismatching stage redirects | `web-load` | |
 | W3 | `kembali` values `//evil`, `https://x` and `/publik` resolve to `/admin` | `web-load` | |
@@ -392,7 +387,7 @@ Proposed rows for PRD Appendix D (decision | choice | reason | requirements). Hu
 ## Dependencies needing approval
 
 Each needs human sign-off (`AGENTS.md`: ask before adding a dependency):
-- `github.com/oapi-codegen/runtime`: contract PR; path and query binding for `getUser` and `listUsers`.
+- `github.com/oapi-codegen/runtime` v1.8.0: approved 2026-11-08, added in the contract PR; JSON body, query and path binding in the generated server.
 - `github.com/alexedwards/scs/v2` and `github.com/alexedwards/scs/pgxstore`: BE.
 - `golang.org/x/crypto`: BE, argon2.
 - `github.com/pquerna/otp`: BE, TOTP and QR PNG.

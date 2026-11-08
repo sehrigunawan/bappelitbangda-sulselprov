@@ -24,6 +24,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current session
+         * @description Returns the session state for any session, including pending stages. The admin shell uses it as its route guard.
+         */
+        get: operations["getSession"];
+        put?: never;
+        /**
+         * Sign in with username and password
+         * @description Checks the credentials and starts a new session (any existing session is destroyed first). The returned stage says what the user must do next; only `authenticated` grants permissions. An unknown username, a wrong password, a disabled user and a username that does not match the username pattern all answer the same 401. Login is throttled per account and per client IP: a blocked key, or the failure that reaches the threshold, answers 429 with `Retry-After`.
+         */
+        post: operations["createSession"];
+        /**
+         * Sign out
+         * @description Destroys the current session, at any stage. The old cookie no longer works.
+         */
+        delete: operations["deleteSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/session/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete sign-in with a TOTP or recovery code
+         * @description Allowed only at stage `totp_required`. Send exactly one of `code` (6 digits) or `recoveryCode`. A TOTP code is accepted only if its time step is newer than the last one used; a recovery code works once. A wrong or replayed code answers 401 and counts toward the login throttle. On success the session token is renewed and the stage resolves again.
+         */
+        post: operations["createTotpVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/session/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-verify with a TOTP code
+         * @description Stage `authenticated` only. Takes a fresh TOTP code (recovery codes are not accepted) and opens a 10-minute step-up window for sensitive operations. A code already used at login in the same 30-second step is rejected. A wrong code answers 401 and counts toward the throttle. A user without confirmed TOTP gets 403.
+         */
+        post: operations["createStepUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change own password
+         * @description Stage `authenticated` or `password_change_required`. Checks the current password (a wrong one answers 400 and counts toward the throttle) and the password policy. On success every other session of the user ends, this session keeps going with a renewed token, the step-up window is cleared and the stage resolves again.
+         */
+        put: operations["updatePassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Confirm TOTP enrollment
+         * @description Stage `authenticated` or `totp_enrollment_required`. Confirms the pending secret with a code from the authenticator app and returns 10 recovery codes, shown once. A code whose time step is not newer than the last one used is rejected. From stage `totp_enrollment_required` the stage resolves again and the session token is renewed.
+         */
+        put: operations["updateTotpEnrollment"];
+        /**
+         * Start TOTP enrollment
+         * @description Stage `authenticated` or `totp_enrollment_required`. Creates a new pending TOTP secret (replacing an earlier unconfirmed one) and returns it with a QR code. 409 once TOTP is confirmed; an admin resets it instead.
+         */
+        post: operations["createTotpEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/totp/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate recovery codes
+         * @description Stage `authenticated` with an open step-up window. Replaces all recovery codes with 10 new ones, shown once; the old codes stop working.
+         */
+        post: operations["createRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List admin users
+         * @description Permission `users.manage`. Users ordered by username ascending, numbered pages. A malformed or out-of-range `page` or `pageSize` answers 400.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create an admin user
+         * @description Permission `users.manage`. Creates the user with a temporary password, returned once; the user must change it at first sign-in.
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get an admin user
+         * @description Permission `users.manage`. A malformed `userId`, or one below 1, answers 400.
+         */
+        get: operations["getUser"];
+        /**
+         * Update an admin user
+         * @description Permission `users.manage`. Replaces the full name, roles and active flag; the username never changes. Role changes apply on the user's next request. Disabling a user ends their sessions. 409 when the caller would remove their own `super_admin` role, disable themselves, or leave no active Super Admin.
+         */
+        put: operations["updateUser"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/users/{userId}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a user's password
+         * @description Permission `users.manage` with an open step-up window. Sets a new temporary password, returned once, and ends the user's sessions. 409 on the caller's own id (use `updatePassword`).
+         */
+        post: operations["createPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth/users/{userId}/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset a user's TOTP
+         * @description Permission `users.manage` with an open step-up window. Clears the user's TOTP secret and recovery codes and ends their sessions; a user whose role requires TOTP enrolls again at next sign-in. 409 on the caller's own id (use the CLI break-glass command).
+         */
+        delete: operations["deleteUserTotp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -67,6 +305,482 @@ export interface components {
              */
             detail?: string;
         };
+        /**
+         * @description Admin role. Labels: super_admin "Super Admin", humas_editor "Editor Humas", document_operator "Operator Dokumen", ppid_officer "Petugas PPID", leadership "Pimpinan".
+         * @example humas_editor
+         * @enum {string}
+         */
+        Role: "super_admin" | "humas_editor" | "document_operator" | "ppid_officer" | "leadership";
+        /**
+         * @description Permission area, one per row of the PRD section 3.4 matrix.
+         * @example publications
+         * @enum {string}
+         */
+        PermissionArea: "publications" | "pages" | "documents" | "site_content" | "media" | "ppid" | "users" | "activity_log" | "statistics";
+        /**
+         * @description Access level; `manage` implies `view`.
+         * @example manage
+         * @enum {string}
+         */
+        PermissionLevel: "view" | "manage";
+        /**
+         * @description What the session may do. Only `authenticated` grants permissions; the other stages allow only the step they name.
+         * @example authenticated
+         * @enum {string}
+         */
+        SessionStage: "password_change_required" | "totp_required" | "totp_enrollment_required" | "authenticated";
+        /**
+         * @description An effective permission of the signed-in user.
+         * @example {
+         *       "area": "publications",
+         *       "level": "manage"
+         *     }
+         */
+        Permission: {
+            area: components["schemas"]["PermissionArea"];
+            level: components["schemas"]["PermissionLevel"];
+        };
+        /**
+         * @description Sign-in form. A username that does not match the username pattern is answered like a wrong password.
+         * @example {
+         *       "username": "andi.admin",
+         *       "password": "kuda-laut-biru-77"
+         *     }
+         */
+        Credentials: {
+            /**
+             * @description Username as typed.
+             * @example andi.admin
+             */
+            username: string;
+            /**
+             * @description Password.
+             * @example kuda-laut-biru-77
+             */
+            password: string;
+        };
+        /**
+         * @description The user behind the session.
+         * @example {
+         *       "id": 1,
+         *       "username": "andi.admin",
+         *       "fullName": "Andi Pratama",
+         *       "roles": [
+         *         "super_admin"
+         *       ]
+         *     }
+         */
+        SessionUser: {
+            /**
+             * Format: int64
+             * @description User id.
+             * @example 1
+             */
+            id: number;
+            /**
+             * @description Username.
+             * @example andi.admin
+             */
+            username: string;
+            /**
+             * @description Full name.
+             * @example Andi Pratama
+             */
+            fullName: string;
+            /**
+             * @description Assigned roles.
+             * @example [
+             *       "super_admin"
+             *     ]
+             */
+            roles: components["schemas"]["Role"][];
+        };
+        /**
+         * @description The current session.
+         * @example {
+         *       "stage": "authenticated",
+         *       "user": {
+         *         "id": 1,
+         *         "username": "andi.admin",
+         *         "fullName": "Andi Pratama",
+         *         "roles": [
+         *           "humas_editor"
+         *         ]
+         *       },
+         *       "permissions": [
+         *         {
+         *           "area": "publications",
+         *           "level": "manage"
+         *         },
+         *         {
+         *           "area": "pages",
+         *           "level": "manage"
+         *         },
+         *         {
+         *           "area": "site_content",
+         *           "level": "manage"
+         *         },
+         *         {
+         *           "area": "media",
+         *           "level": "manage"
+         *         }
+         *       ],
+         *       "totpEnrolled": false,
+         *       "stepUpExpiresAt": null
+         *     }
+         */
+        SessionState: {
+            stage: components["schemas"]["SessionStage"];
+            user: components["schemas"]["SessionUser"];
+            /**
+             * @description Effective permissions, one per area at its highest level, in matrix order. Empty unless `stage` is `authenticated`.
+             * @example [
+             *       {
+             *         "area": "publications",
+             *         "level": "manage"
+             *       }
+             *     ]
+             */
+            permissions: components["schemas"]["Permission"][];
+            /**
+             * @description True once the user's TOTP is confirmed.
+             * @example true
+             */
+            totpEnrolled: boolean;
+            /**
+             * Format: date-time
+             * @description End of the step-up window; null when there is none or it has passed.
+             * @example 2026-10-15T06:15:00Z
+             */
+            stepUpExpiresAt: string | null;
+        };
+        /**
+         * @description Second sign-in factor. Exactly one of `code` and `recoveryCode` must be present.
+         * @example {
+         *       "code": "492039"
+         *     }
+         */
+        TotpVerification: {
+            /**
+             * @description 6-digit code from the authenticator app.
+             * @example 492039
+             */
+            code?: string;
+            /**
+             * @description Recovery code. Dashes and spaces are ignored, case does not matter, `o` reads as `0` and `i`/`l` as `1`.
+             * @example 7k2mp-x9qrt
+             */
+            recoveryCode?: string;
+        };
+        /**
+         * @description A 6-digit TOTP code.
+         * @example {
+         *       "code": "492039"
+         *     }
+         */
+        TotpCode: {
+            /**
+             * @description 6-digit code from the authenticator app.
+             * @example 492039
+             */
+            code: string;
+        };
+        /**
+         * @description A pending TOTP secret (SHA-1, 6 digits, 30 s, issuer `Bappelitbangda Sulsel`).
+         * @example {
+         *       "secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+         *       "otpauthUri": "otpauth://totp/Bappelitbangda%20Sulsel:andi.admin?algorithm=SHA1&digits=6&issuer=Bappelitbangda%20Sulsel&period=30&secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+         *       "qrCodePng": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+         *     }
+         */
+        TotpEnrollment: {
+            /**
+             * @description Base32 secret for manual entry.
+             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /**
+             * @description `otpauth://` URI encoded in the QR code.
+             * @example otpauth://totp/Bappelitbangda%20Sulsel:andi.admin?algorithm=SHA1&digits=6&issuer=Bappelitbangda%20Sulsel&period=30&secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            otpauthUri: string;
+            /**
+             * Format: byte
+             * @description QR code as a base64 PNG, for a `data:image/png;base64,` image.
+             * @example iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=
+             */
+            qrCodePng: string;
+        };
+        /**
+         * @description Ten single-use recovery codes, shown once.
+         * @example {
+         *       "codes": [
+         *         "7k2mp-x9qrt",
+         *         "3hv8n-c4wze",
+         *         "q0d5j-m6tya",
+         *         "b8r2f-n7kxs",
+         *         "z4c6w-p1hmd",
+         *         "e9t3g-v5jqa",
+         *         "m2x7s-k8bnf",
+         *         "r6d1z-w3pce",
+         *         "h5q9v-t0gjm",
+         *         "n1f4k-y2rsx"
+         *       ]
+         *     }
+         */
+        RecoveryCodes: {
+            /**
+             * @description Codes in `xxxxx-xxxxx` form from the alphabet `0123456789abcdefghjkmnpqrstvwxyz`.
+             * @example [
+             *       "7k2mp-x9qrt",
+             *       "3hv8n-c4wze",
+             *       "q0d5j-m6tya",
+             *       "b8r2f-n7kxs",
+             *       "z4c6w-p1hmd",
+             *       "e9t3g-v5jqa",
+             *       "m2x7s-k8bnf",
+             *       "r6d1z-w3pce",
+             *       "h5q9v-t0gjm",
+             *       "n1f4k-y2rsx"
+             *     ]
+             */
+            codes: string[];
+        };
+        /**
+         * @description Own password change.
+         * @example {
+         *       "currentPassword": "k7m2x9qrt3hv8nc4",
+         *       "newPassword": "kuda-laut-biru-77"
+         *     }
+         */
+        PasswordChange: {
+            /**
+             * @description The current (or temporary) password.
+             * @example k7m2x9qrt3hv8nc4
+             */
+            currentPassword: string;
+            /**
+             * @description New password: 12 to 128 Unicode code points, not a common password, not equal to or containing the username.
+             * @example kuda-laut-biru-77
+             */
+            newPassword: string;
+        };
+        /**
+         * @description An open step-up window.
+         * @example {
+         *       "expiresAt": "2026-10-15T06:15:00Z"
+         *     }
+         */
+        StepUp: {
+            /**
+             * Format: date-time
+             * @description End of the step-up window.
+             * @example 2026-10-15T06:15:00Z
+             */
+            expiresAt: string;
+        };
+        /**
+         * @description An admin user.
+         * @example {
+         *       "id": 12,
+         *       "username": "sari.ppid",
+         *       "fullName": "Sari Wulandari",
+         *       "roles": [
+         *         "ppid_officer"
+         *       ],
+         *       "active": true,
+         *       "totpEnrolled": true,
+         *       "lastLoginAt": "2026-10-15T06:05:00Z",
+         *       "createdAt": "2026-10-01T01:00:00Z"
+         *     }
+         */
+        User: {
+            /**
+             * Format: int64
+             * @description User id.
+             * @example 12
+             */
+            id: number;
+            /**
+             * @description Username; never changes.
+             * @example sari.ppid
+             */
+            username: string;
+            /**
+             * @description Full name.
+             * @example Sari Wulandari
+             */
+            fullName: string;
+            /**
+             * @description Assigned roles.
+             * @example [
+             *       "ppid_officer"
+             *     ]
+             */
+            roles: components["schemas"]["Role"][];
+            /**
+             * @description False once the user is disabled.
+             * @example true
+             */
+            active: boolean;
+            /**
+             * @description True once the user's TOTP is confirmed.
+             * @example true
+             */
+            totpEnrolled: boolean;
+            /**
+             * Format: date-time
+             * @description Last full sign-in; null if never.
+             * @example 2026-10-15T06:05:00Z
+             */
+            lastLoginAt: string | null;
+            /**
+             * Format: date-time
+             * @description Creation time.
+             * @example 2026-10-01T01:00:00Z
+             */
+            createdAt: string;
+        };
+        /**
+         * @description One page of users, ordered by username.
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": 12,
+         *           "username": "sari.ppid",
+         *           "fullName": "Sari Wulandari",
+         *           "roles": [
+         *             "ppid_officer"
+         *           ],
+         *           "active": true,
+         *           "totpEnrolled": true,
+         *           "lastLoginAt": "2026-10-15T06:05:00Z",
+         *           "createdAt": "2026-10-01T01:00:00Z"
+         *         }
+         *       ],
+         *       "page": 1,
+         *       "pageSize": 10,
+         *       "total": 1
+         *     }
+         */
+        UserPage: {
+            /** @description Users on this page. */
+            items: components["schemas"]["User"][];
+            /**
+             * @description Page number.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Page size.
+             * @example 10
+             */
+            pageSize: number;
+            /**
+             * @description Number of users across all pages.
+             * @example 1
+             */
+            total: number;
+        };
+        /**
+         * @description New admin user.
+         * @example {
+         *       "username": "sari.ppid",
+         *       "fullName": "Sari Wulandari",
+         *       "roles": [
+         *         "ppid_officer"
+         *       ]
+         *     }
+         */
+        UserCreate: {
+            /**
+             * @description Username, 3 to 32 of `a-z`, `0-9`, `.`, `_`, `-`.
+             * @example sari.ppid
+             */
+            username: string;
+            /**
+             * @description Full name.
+             * @example Sari Wulandari
+             */
+            fullName: string;
+            /**
+             * @description Roles, at least one.
+             * @example [
+             *       "ppid_officer"
+             *     ]
+             */
+            roles: components["schemas"]["Role"][];
+        };
+        /**
+         * @description Editable fields of an admin user.
+         * @example {
+         *       "fullName": "Sari Wulandari",
+         *       "roles": [
+         *         "ppid_officer",
+         *         "document_operator"
+         *       ],
+         *       "active": true
+         *     }
+         */
+        UserUpdate: {
+            /**
+             * @description Full name.
+             * @example Sari Wulandari
+             */
+            fullName: string;
+            /**
+             * @description Roles, at least one.
+             * @example [
+             *       "ppid_officer",
+             *       "document_operator"
+             *     ]
+             */
+            roles: components["schemas"]["Role"][];
+            /**
+             * @description False disables the user and ends their sessions.
+             * @example true
+             */
+            active: boolean;
+        };
+        /**
+         * @description A created user and its temporary password, shown once.
+         * @example {
+         *       "user": {
+         *         "id": 12,
+         *         "username": "sari.ppid",
+         *         "fullName": "Sari Wulandari",
+         *         "roles": [
+         *           "ppid_officer"
+         *         ],
+         *         "active": true,
+         *         "totpEnrolled": false,
+         *         "lastLoginAt": null,
+         *         "createdAt": "2026-10-01T01:00:00Z"
+         *       },
+         *       "temporaryPassword": "k7m2x9qrt3hv8nc4"
+         *     }
+         */
+        UserCreated: {
+            user: components["schemas"]["User"];
+            /**
+             * @description 16-character temporary password; must be changed at first sign-in.
+             * @example k7m2x9qrt3hv8nc4
+             */
+            temporaryPassword: string;
+        };
+        /**
+         * @description A new temporary password, shown once.
+         * @example {
+         *       "temporaryPassword": "k7m2x9qrt3hv8nc4"
+         *     }
+         */
+        TemporaryPassword: {
+            /**
+             * @description 16-character temporary password; must be changed at next sign-in.
+             * @example k7m2x9qrt3hv8nc4
+             */
+            temporaryPassword: string;
+        };
     };
     responses: {
         /** @description Error (RFC 9457 problem details) */
@@ -85,10 +799,123 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description No valid session, the session expired or ended, or the session is still at a pending stage where this operation needs `authenticated`. Also a wrong or replayed code. */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Unauthorized",
+                 *       "status": 401,
+                 *       "detail": "Sesi tidak valid atau telah berakhir."
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Access denied: missing permission, a session stage this operation does not allow, a step-up window that is missing or expired, or a cross-origin request. `detail` tells them apart. */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Too many failed attempts for this account or client IP. Retry after `Retry-After` seconds. */
+        TooManyRequests: {
+            headers: {
+                "Retry-After": components["headers"]["RetryAfter"];
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Too Many Requests",
+                 *       "status": 429
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description `userId` is not an integer or is below 1. */
+        InvalidUserId: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Bad Request",
+                 *       "status": 400
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description No user with this id. */
+        UserNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Not Found",
+                 *       "status": 404
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The target is the caller's own account. */
+        OwnAccount: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Conflict",
+                 *       "status": 409
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
-    parameters: never;
+    parameters: {
+        /**
+         * @description Page number, starting at 1.
+         * @example 1
+         */
+        Page: number;
+        /**
+         * @description Items per page, 1 to 50.
+         * @example 10
+         */
+        PageSize: number;
+        /**
+         * @description User id.
+         * @example 12
+         */
+        UserId: number;
+    };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /**
+         * @description Whole seconds until the throttle block ends, rounded up.
+         * @example 900
+         */
+        RetryAfter: number;
+        /**
+         * @description The session cookie, for example `__Host-bpl_session=<token>; Path=/; HttpOnly; Secure; SameSite=Strict`.
+         * @example __Host-bpl_session=R2x6d0p1c2t0b2tlbg; Path=/; HttpOnly; Secure; SameSite=Strict
+         */
+        SetSessionCookie: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -116,6 +943,782 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Username and password. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "username": "andi.admin",
+                 *       "password": "kuda-laut-biru-77"
+                 *     }
+                 */
+                "application/json": components["schemas"]["Credentials"];
+            };
+        };
+        responses: {
+            /** @description Password accepted. The session cookie is set (`__Host-bpl_session`, or `bpl_session` in development); its token differs from any token sent with the request. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SetSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description The request body is not valid JSON or not an object. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Wrong credentials. The body is identical for an unknown username, a wrong password, a disabled user and a malformed username. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Nama pengguna atau kata sandi salah."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTotpVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Exactly one of a TOTP code or a recovery code. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "code": "492039"
+                 *     }
+                 */
+                "application/json": components["schemas"]["TotpVerification"];
+            };
+        };
+        responses: {
+            /** @description Code accepted. The session token is renewed. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SetSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Neither or both of `code` and `recoveryCode` are present, or the body is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createStepUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A fresh TOTP code. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "code": "492039"
+                 *     }
+                 */
+                "application/json": components["schemas"]["TotpCode"];
+            };
+        };
+        responses: {
+            /** @description Step-up granted until `expiresAt`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "expiresAt": "2026-10-15T06:15:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["StepUp"];
+                };
+            };
+            /** @description The body is malformed or `code` is not 6 digits. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Current and new password. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "currentPassword": "k7m2x9qrt3hv8nc4",
+                 *       "newPassword": "kuda-laut-biru-77"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Password changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The new password fails the policy, or the current password is wrong. `detail` is one of the texts in the examples and is shown to the user as is. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateTotpEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A code from the authenticator app for the pending secret. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "code": "492039"
+                 *     }
+                 */
+                "application/json": components["schemas"]["TotpCode"];
+            };
+        };
+        responses: {
+            /** @description TOTP confirmed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "codes": [
+                     *         "7k2mp-x9qrt",
+                     *         "3hv8n-c4wze",
+                     *         "q0d5j-m6tya",
+                     *         "b8r2f-n7kxs",
+                     *         "z4c6w-p1hmd",
+                     *         "e9t3g-v5jqa",
+                     *         "m2x7s-k8bnf",
+                     *         "r6d1z-w3pce",
+                     *         "h5q9v-t0gjm",
+                     *         "n1f4k-y2rsx"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
+            };
+            /** @description Wrong code, or a malformed body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400,
+                     *       "detail": "Kode tidak valid."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description There is no pending enrollment to confirm. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Conflict",
+                     *       "status": 409
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTotpEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending enrollment created. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+                     *       "otpauthUri": "otpauth://totp/Bappelitbangda%20Sulsel:andi.admin?algorithm=SHA1&digits=6&issuer=Bappelitbangda%20Sulsel&period=30&secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+                     *       "qrCodePng": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TotpEnrollment"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description TOTP is already confirmed for this user. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Conflict",
+                     *       "status": 409
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New recovery codes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "codes": [
+                     *         "7k2mp-x9qrt",
+                     *         "3hv8n-c4wze",
+                     *         "q0d5j-m6tya",
+                     *         "b8r2f-n7kxs",
+                     *         "z4c6w-p1hmd",
+                     *         "e9t3g-v5jqa",
+                     *         "m2x7s-k8bnf",
+                     *         "r6d1z-w3pce",
+                     *         "h5q9v-t0gjm",
+                     *         "n1f4k-y2rsx"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RecoveryCodes"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Page number, starting at 1.
+                 * @example 1
+                 */
+                page?: components["parameters"]["Page"];
+                /**
+                 * @description Items per page, 1 to 50.
+                 * @example 10
+                 */
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of users. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": 12,
+                     *           "username": "sari.ppid",
+                     *           "fullName": "Sari Wulandari",
+                     *           "roles": [
+                     *             "ppid_officer"
+                     *           ],
+                     *           "active": true,
+                     *           "totpEnrolled": true,
+                     *           "lastLoginAt": "2026-10-15T06:05:00Z",
+                     *           "createdAt": "2026-10-01T01:00:00Z"
+                     *         }
+                     *       ],
+                     *       "page": 1,
+                     *       "pageSize": 10,
+                     *       "total": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UserPage"];
+                };
+            };
+            /** @description Malformed or out-of-range `page` or `pageSize`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The new user. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "username": "sari.ppid",
+                 *       "fullName": "Sari Wulandari",
+                 *       "roles": [
+                 *         "ppid_officer"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description User created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "user": {
+                     *         "id": 12,
+                     *         "username": "sari.ppid",
+                     *         "fullName": "Sari Wulandari",
+                     *         "roles": [
+                     *           "ppid_officer"
+                     *         ],
+                     *         "active": true,
+                     *         "totpEnrolled": false,
+                     *         "lastLoginAt": null,
+                     *         "createdAt": "2026-10-01T01:00:00Z"
+                     *       },
+                     *       "temporaryPassword": "k7m2x9qrt3hv8nc4"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UserCreated"];
+                };
+            };
+            /** @description Invalid username, full name or roles (unknown, empty or repeated). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description The username is taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Conflict",
+                     *       "status": 409,
+                     *       "detail": "Nama pengguna sudah dipakai."
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": 12,
+                     *       "username": "sari.ppid",
+                     *       "fullName": "Sari Wulandari",
+                     *       "roles": [
+                     *         "ppid_officer"
+                     *       ],
+                     *       "active": true,
+                     *       "totpEnrolled": true,
+                     *       "lastLoginAt": "2026-10-15T06:05:00Z",
+                     *       "createdAt": "2026-10-01T01:00:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["InvalidUserId"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["UserNotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        /** @description The new full name, roles and active flag. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "fullName": "Sari Wulandari",
+                 *       "roles": [
+                 *         "ppid_officer",
+                 *         "document_operator"
+                 *       ],
+                 *       "active": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": 12,
+                     *       "username": "sari.ppid",
+                     *       "fullName": "Sari Wulandari",
+                     *       "roles": [
+                     *         "ppid_officer",
+                     *         "document_operator"
+                     *       ],
+                     *       "active": true,
+                     *       "totpEnrolled": true,
+                     *       "lastLoginAt": "2026-10-15T06:05:00Z",
+                     *       "createdAt": "2026-10-01T01:00:00Z"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Malformed `userId`, or invalid full name or roles. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Bad Request",
+                     *       "status": 400
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["UserNotFound"];
+            /** @description Self-demotion, self-disable, or no active Super Admin would remain. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "title": "Conflict",
+                     *       "status": 409
+                     *     }
+                     */
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new temporary password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "temporaryPassword": "k7m2x9qrt3hv8nc4"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TemporaryPassword"];
+                };
+            };
+            400: components["responses"]["InvalidUserId"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["UserNotFound"];
+            409: components["responses"]["OwnAccount"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteUserTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description User id.
+                 * @example 12
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description TOTP cleared. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["InvalidUserId"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["UserNotFound"];
+            409: components["responses"]["OwnAccount"];
             default: components["responses"]["Problem"];
         };
     };

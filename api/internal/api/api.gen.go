@@ -7,10 +7,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 )
 
 // Defines values for HealthStatus.
@@ -28,6 +31,129 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for PermissionArea.
+const (
+	ActivityLog  PermissionArea = "activity_log"
+	Documents    PermissionArea = "documents"
+	Media        PermissionArea = "media"
+	Pages        PermissionArea = "pages"
+	Ppid         PermissionArea = "ppid"
+	Publications PermissionArea = "publications"
+	SiteContent  PermissionArea = "site_content"
+	Statistics   PermissionArea = "statistics"
+	Users        PermissionArea = "users"
+)
+
+// Valid indicates whether the value is a known member of the PermissionArea enum.
+func (e PermissionArea) Valid() bool {
+	switch e {
+	case ActivityLog:
+		return true
+	case Documents:
+		return true
+	case Media:
+		return true
+	case Pages:
+		return true
+	case Ppid:
+		return true
+	case Publications:
+		return true
+	case SiteContent:
+		return true
+	case Statistics:
+		return true
+	case Users:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PermissionLevel.
+const (
+	Manage PermissionLevel = "manage"
+	View   PermissionLevel = "view"
+)
+
+// Valid indicates whether the value is a known member of the PermissionLevel enum.
+func (e PermissionLevel) Valid() bool {
+	switch e {
+	case Manage:
+		return true
+	case View:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Role.
+const (
+	DocumentOperator Role = "document_operator"
+	HumasEditor      Role = "humas_editor"
+	Leadership       Role = "leadership"
+	PpidOfficer      Role = "ppid_officer"
+	SuperAdmin       Role = "super_admin"
+)
+
+// Valid indicates whether the value is a known member of the Role enum.
+func (e Role) Valid() bool {
+	switch e {
+	case DocumentOperator:
+		return true
+	case HumasEditor:
+		return true
+	case Leadership:
+		return true
+	case PpidOfficer:
+		return true
+	case SuperAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionStage.
+const (
+	Authenticated          SessionStage = "authenticated"
+	PasswordChangeRequired SessionStage = "password_change_required"
+	TotpEnrollmentRequired SessionStage = "totp_enrollment_required"
+	TotpRequired           SessionStage = "totp_required"
+)
+
+// Valid indicates whether the value is a known member of the SessionStage enum.
+func (e SessionStage) Valid() bool {
+	switch e {
+	case Authenticated:
+		return true
+	case PasswordChangeRequired:
+		return true
+	case TotpEnrollmentRequired:
+		return true
+	case TotpRequired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Credentials Sign-in form. A username that does not match the username pattern is answered like a wrong password.
+//
+// Example: {"password":"kuda-laut-biru-77","username":"andi.admin"}
+type Credentials struct {
+	// Password Password.
+	//
+	// Example: kuda-laut-biru-77
+	Password string `json:"password"`
+
+	// Username Username as typed.
+	//
+	// Example: andi.admin
+	Username string `json:"username"`
+}
+
 // Health Liveness report.
 //
 // Example: {"status":"ok"}
@@ -42,6 +168,47 @@ type Health struct {
 //
 // Example: ok
 type HealthStatus string
+
+// PasswordChange Own password change.
+//
+// Example: {"currentPassword":"k7m2x9qrt3hv8nc4","newPassword":"kuda-laut-biru-77"}
+type PasswordChange struct {
+	// CurrentPassword The current (or temporary) password.
+	//
+	// Example: k7m2x9qrt3hv8nc4
+	CurrentPassword string `json:"currentPassword"`
+
+	// NewPassword New password: 12 to 128 Unicode code points, not a common password, not equal to or containing the username.
+	//
+	//
+	// Example: kuda-laut-biru-77
+	NewPassword string `json:"newPassword"`
+}
+
+// Permission An effective permission of the signed-in user.
+//
+// Example: {"area":"publications","level":"manage"}
+type Permission struct {
+	// Area Permission area, one per row of the PRD section 3.4 matrix.
+	//
+	// Example: publications
+	Area PermissionArea `json:"area"`
+
+	// Level Access level; `manage` implies `view`.
+	//
+	// Example: manage
+	Level PermissionLevel `json:"level"`
+}
+
+// PermissionArea Permission area, one per row of the PRD section 3.4 matrix.
+//
+// Example: publications
+type PermissionArea string
+
+// PermissionLevel Access level; `manage` implies `view`.
+//
+// Example: manage
+type PermissionLevel string
 
 // Problem Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
 //
@@ -63,8 +230,388 @@ type Problem struct {
 	Title string `json:"title"`
 }
 
+// RecoveryCodes Ten single-use recovery codes, shown once.
+//
+// Example: {"codes":["7k2mp-x9qrt","3hv8n-c4wze","q0d5j-m6tya","b8r2f-n7kxs","z4c6w-p1hmd","e9t3g-v5jqa","m2x7s-k8bnf","r6d1z-w3pce","h5q9v-t0gjm","n1f4k-y2rsx"]}
+type RecoveryCodes struct {
+	// Codes Codes in `xxxxx-xxxxx` form from the alphabet `0123456789abcdefghjkmnpqrstvwxyz`.
+	//
+	// Example: ["7k2mp-x9qrt","3hv8n-c4wze","q0d5j-m6tya","b8r2f-n7kxs","z4c6w-p1hmd","e9t3g-v5jqa","m2x7s-k8bnf","r6d1z-w3pce","h5q9v-t0gjm","n1f4k-y2rsx"]
+	Codes []string `json:"codes"`
+}
+
+// Role Admin role. Labels: super_admin "Super Admin", humas_editor "Editor Humas", document_operator "Operator Dokumen", ppid_officer "Petugas PPID", leadership "Pimpinan".
+//
+// Example: humas_editor
+type Role string
+
+// SessionStage What the session may do. Only `authenticated` grants permissions; the other stages allow only the step they name.
+//
+// Example: authenticated
+type SessionStage string
+
+// SessionState The current session.
+//
+// Example: {"permissions":[{"area":"publications","level":"manage"},{"area":"pages","level":"manage"},{"area":"site_content","level":"manage"},{"area":"media","level":"manage"}],"stage":"authenticated","stepUpExpiresAt":null,"totpEnrolled":false,"user":{"fullName":"Andi Pratama","id":1,"roles":["humas_editor"],"username":"andi.admin"}}
+type SessionState struct {
+	// Permissions Effective permissions, one per area at its highest level, in matrix order. Empty unless `stage` is `authenticated`.
+	//
+	//
+	// Example: [{"area":"publications","level":"manage"}]
+	Permissions []Permission `json:"permissions"`
+
+	// Stage What the session may do. Only `authenticated` grants permissions; the other stages allow only the step they name.
+	//
+	//
+	// Example: authenticated
+	Stage SessionStage `json:"stage"`
+
+	// StepUpExpiresAt End of the step-up window; null when there is none or it has passed.
+	//
+	// Example: 2026-10-15T06:15:00Z
+	StepUpExpiresAt *time.Time `json:"stepUpExpiresAt"`
+
+	// TotpEnrolled True once the user's TOTP is confirmed.
+	//
+	// Example: true
+	TotpEnrolled bool `json:"totpEnrolled"`
+
+	// User The user behind the session.
+	//
+	// Example: {"fullName":"Andi Pratama","id":1,"roles":["super_admin"],"username":"andi.admin"}
+	User SessionUser `json:"user"`
+}
+
+// SessionUser The user behind the session.
+//
+// Example: {"fullName":"Andi Pratama","id":1,"roles":["super_admin"],"username":"andi.admin"}
+type SessionUser struct {
+	// FullName Full name.
+	//
+	// Example: Andi Pratama
+	FullName string `json:"fullName"`
+
+	// Id User id.
+	//
+	// Example: 1
+	Id int64 `json:"id"`
+
+	// Roles Assigned roles.
+	//
+	// Example: ["super_admin"]
+	Roles []Role `json:"roles"`
+
+	// Username Username.
+	//
+	// Example: andi.admin
+	Username string `json:"username"`
+}
+
+// StepUp An open step-up window.
+//
+// Example: {"expiresAt":"2026-10-15T06:15:00Z"}
+type StepUp struct {
+	// ExpiresAt End of the step-up window.
+	//
+	// Example: 2026-10-15T06:15:00Z
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// TemporaryPassword A new temporary password, shown once.
+//
+// Example: {"temporaryPassword":"k7m2x9qrt3hv8nc4"}
+type TemporaryPassword struct {
+	// TemporaryPassword 16-character temporary password; must be changed at next sign-in.
+	//
+	// Example: k7m2x9qrt3hv8nc4
+	TemporaryPassword string `json:"temporaryPassword"`
+}
+
+// TotpCode A 6-digit TOTP code.
+//
+// Example: {"code":"492039"}
+type TotpCode struct {
+	// Code 6-digit code from the authenticator app.
+	//
+	// Example: 492039
+	Code string `json:"code"`
+}
+
+// TotpEnrollment A pending TOTP secret (SHA-1, 6 digits, 30 s, issuer `Bappelitbangda Sulsel`).
+//
+// Example: {"otpauthUri":"otpauth://totp/Bappelitbangda%20Sulsel:andi.admin?algorithm=SHA1\u0026digits=6\u0026issuer=Bappelitbangda%20Sulsel\u0026period=30\u0026secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP","qrCodePng":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=","secret":"JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"}
+type TotpEnrollment struct {
+	// OtpauthUri `otpauth://` URI encoded in the QR code.
+	//
+	// Example: otpauth://totp/Bappelitbangda%20Sulsel:andi.admin?algorithm=SHA1&digits=6&issuer=Bappelitbangda%20Sulsel&period=30&secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+	OtpauthUri string `json:"otpauthUri"`
+
+	// QrCodePng QR code as a base64 PNG, for a `data:image/png;base64,` image.
+	//
+	// Example: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=
+	QrCodePng []byte `json:"qrCodePng"`
+
+	// Secret Base32 secret for manual entry.
+	//
+	// Example: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+	Secret string `json:"secret"`
+}
+
+// TotpVerification Second sign-in factor. Exactly one of `code` and `recoveryCode` must be present.
+//
+// Example: {"code":"492039"}
+type TotpVerification struct {
+	// Code 6-digit code from the authenticator app.
+	//
+	// Example: 492039
+	Code *string `json:"code,omitempty"`
+
+	// RecoveryCode Recovery code. Dashes and spaces are ignored, case does not matter, `o` reads as `0` and `i`/`l` as `1`.
+	//
+	//
+	// Example: 7k2mp-x9qrt
+	RecoveryCode *string `json:"recoveryCode,omitempty"`
+}
+
+// User An admin user.
+//
+// Example: {"active":true,"createdAt":"2026-10-01T01:00:00Z","fullName":"Sari Wulandari","id":12,"lastLoginAt":"2026-10-15T06:05:00Z","roles":["ppid_officer"],"totpEnrolled":true,"username":"sari.ppid"}
+type User struct {
+	// Active False once the user is disabled.
+	//
+	// Example: true
+	Active bool `json:"active"`
+
+	// CreatedAt Creation time.
+	//
+	// Example: 2026-10-01T01:00:00Z
+	CreatedAt time.Time `json:"createdAt"`
+
+	// FullName Full name.
+	//
+	// Example: Sari Wulandari
+	FullName string `json:"fullName"`
+
+	// Id User id.
+	//
+	// Example: 12
+	Id int64 `json:"id"`
+
+	// LastLoginAt Last full sign-in; null if never.
+	//
+	// Example: 2026-10-15T06:05:00Z
+	LastLoginAt *time.Time `json:"lastLoginAt"`
+
+	// Roles Assigned roles.
+	//
+	// Example: ["ppid_officer"]
+	Roles []Role `json:"roles"`
+
+	// TotpEnrolled True once the user's TOTP is confirmed.
+	//
+	// Example: true
+	TotpEnrolled bool `json:"totpEnrolled"`
+
+	// Username Username; never changes.
+	//
+	// Example: sari.ppid
+	Username string `json:"username"`
+}
+
+// UserCreate New admin user.
+//
+// Example: {"fullName":"Sari Wulandari","roles":["ppid_officer"],"username":"sari.ppid"}
+type UserCreate struct {
+	// FullName Full name.
+	//
+	// Example: Sari Wulandari
+	FullName string `json:"fullName"`
+
+	// Roles Roles, at least one.
+	//
+	// Example: ["ppid_officer"]
+	Roles []Role `json:"roles"`
+
+	// Username Username, 3 to 32 of `a-z`, `0-9`, `.`, `_`, `-`.
+	//
+	// Example: sari.ppid
+	Username string `json:"username"`
+}
+
+// UserCreated A created user and its temporary password, shown once.
+//
+// Example: {"temporaryPassword":"k7m2x9qrt3hv8nc4","user":{"active":true,"createdAt":"2026-10-01T01:00:00Z","fullName":"Sari Wulandari","id":12,"lastLoginAt":null,"roles":["ppid_officer"],"totpEnrolled":false,"username":"sari.ppid"}}
+type UserCreated struct {
+	// TemporaryPassword 16-character temporary password; must be changed at first sign-in.
+	//
+	// Example: k7m2x9qrt3hv8nc4
+	TemporaryPassword string `json:"temporaryPassword"`
+
+	// User An admin user.
+	//
+	// Example: {"active":true,"createdAt":"2026-10-01T01:00:00Z","fullName":"Sari Wulandari","id":12,"lastLoginAt":"2026-10-15T06:05:00Z","roles":["ppid_officer"],"totpEnrolled":true,"username":"sari.ppid"}
+	User User `json:"user"`
+}
+
+// UserPage One page of users, ordered by username.
+//
+// Example: {"items":[{"active":true,"createdAt":"2026-10-01T01:00:00Z","fullName":"Sari Wulandari","id":12,"lastLoginAt":"2026-10-15T06:05:00Z","roles":["ppid_officer"],"totpEnrolled":true,"username":"sari.ppid"}],"page":1,"pageSize":10,"total":1}
+type UserPage struct {
+	// Items Users on this page.
+	Items []User `json:"items"`
+
+	// Page Page number.
+	//
+	// Example: 1
+	Page int `json:"page"`
+
+	// PageSize Page size.
+	//
+	// Example: 10
+	PageSize int `json:"pageSize"`
+
+	// Total Number of users across all pages.
+	//
+	// Example: 1
+	Total int `json:"total"`
+}
+
+// UserUpdate Editable fields of an admin user.
+//
+// Example: {"active":true,"fullName":"Sari Wulandari","roles":["ppid_officer","document_operator"]}
+type UserUpdate struct {
+	// Active False disables the user and ends their sessions.
+	//
+	// Example: true
+	Active bool `json:"active"`
+
+	// FullName Full name.
+	//
+	// Example: Sari Wulandari
+	FullName string `json:"fullName"`
+
+	// Roles Roles, at least one.
+	//
+	// Example: ["ppid_officer","document_operator"]
+	Roles []Role `json:"roles"`
+}
+
+// Page Example: 1
+type Page = int
+
+// PageSize Example: 10
+type PageSize = int
+
+// UserId Example: 12
+type UserId = int64
+
+// Forbidden Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type Forbidden = Problem
+
+// InvalidUserId Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type InvalidUserId = Problem
+
+// OwnAccount Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type OwnAccount = Problem
+
+// TooManyRequests Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type TooManyRequests = Problem
+
+// Unauthorized Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type Unauthorized = Problem
+
+// UserNotFound Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type UserNotFound = Problem
+
+// ListUsersParams defines parameters for ListUsers.
+type ListUsersParams struct {
+	// Page Page number, starting at 1.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Items per page, 1 to 50.
+	PageSize *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+}
+
+// UpdatePasswordJSONRequestBody defines body for UpdatePassword for application/json ContentType.
+type UpdatePasswordJSONRequestBody = PasswordChange
+
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = Credentials
+
+// CreateStepUpJSONRequestBody defines body for CreateStepUp for application/json ContentType.
+type CreateStepUpJSONRequestBody = TotpCode
+
+// CreateTotpVerificationJSONRequestBody defines body for CreateTotpVerification for application/json ContentType.
+type CreateTotpVerificationJSONRequestBody = TotpVerification
+
+// UpdateTotpEnrollmentJSONRequestBody defines body for UpdateTotpEnrollment for application/json ContentType.
+type UpdateTotpEnrollmentJSONRequestBody = TotpCode
+
+// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
+type CreateUserJSONRequestBody = UserCreate
+
+// UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
+type UpdateUserJSONRequestBody = UserUpdate
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// UpdatePassword Change own password
+	// (PUT /api/v1/admin/auth/password)
+	UpdatePassword(w http.ResponseWriter, r *http.Request)
+	// DeleteSession Sign out
+	// (DELETE /api/v1/admin/auth/session)
+	DeleteSession(w http.ResponseWriter, r *http.Request)
+	// GetSession Current session
+	// (GET /api/v1/admin/auth/session)
+	GetSession(w http.ResponseWriter, r *http.Request)
+	// CreateSession Sign in with username and password
+	// (POST /api/v1/admin/auth/session)
+	CreateSession(w http.ResponseWriter, r *http.Request)
+	// CreateStepUp Re-verify with a TOTP code
+	// (POST /api/v1/admin/auth/session/step-up)
+	CreateStepUp(w http.ResponseWriter, r *http.Request)
+	// CreateTotpVerification Complete sign-in with a TOTP or recovery code
+	// (POST /api/v1/admin/auth/session/totp)
+	CreateTotpVerification(w http.ResponseWriter, r *http.Request)
+	// CreateTotpEnrollment Start TOTP enrollment
+	// (POST /api/v1/admin/auth/totp)
+	CreateTotpEnrollment(w http.ResponseWriter, r *http.Request)
+	// UpdateTotpEnrollment Confirm TOTP enrollment
+	// (PUT /api/v1/admin/auth/totp)
+	UpdateTotpEnrollment(w http.ResponseWriter, r *http.Request)
+	// CreateRecoveryCodes Regenerate recovery codes
+	// (POST /api/v1/admin/auth/totp/recovery-codes)
+	CreateRecoveryCodes(w http.ResponseWriter, r *http.Request)
+	// ListUsers List admin users
+	// (GET /api/v1/admin/auth/users)
+	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
+	// CreateUser Create an admin user
+	// (POST /api/v1/admin/auth/users)
+	CreateUser(w http.ResponseWriter, r *http.Request)
+	// GetUser Get an admin user
+	// (GET /api/v1/admin/auth/users/{userId})
+	GetUser(w http.ResponseWriter, r *http.Request, userId UserId)
+	// UpdateUser Update an admin user
+	// (PUT /api/v1/admin/auth/users/{userId})
+	UpdateUser(w http.ResponseWriter, r *http.Request, userId UserId)
+	// CreatePasswordReset Reset a user's password
+	// (POST /api/v1/admin/auth/users/{userId}/password-reset)
+	CreatePasswordReset(w http.ResponseWriter, r *http.Request, userId UserId)
+	// DeleteUserTotp Reset a user's TOTP
+	// (DELETE /api/v1/admin/auth/users/{userId}/totp)
+	DeleteUserTotp(w http.ResponseWriter, r *http.Request, userId UserId)
 	// GetHealth Liveness check
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -73,6 +620,96 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// UpdatePassword Change own password
+// (PUT /api/v1/admin/auth/password)
+func (_ Unimplemented) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteSession Sign out
+// (DELETE /api/v1/admin/auth/session)
+func (_ Unimplemented) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSession Current session
+// (GET /api/v1/admin/auth/session)
+func (_ Unimplemented) GetSession(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateSession Sign in with username and password
+// (POST /api/v1/admin/auth/session)
+func (_ Unimplemented) CreateSession(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateStepUp Re-verify with a TOTP code
+// (POST /api/v1/admin/auth/session/step-up)
+func (_ Unimplemented) CreateStepUp(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateTotpVerification Complete sign-in with a TOTP or recovery code
+// (POST /api/v1/admin/auth/session/totp)
+func (_ Unimplemented) CreateTotpVerification(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateTotpEnrollment Start TOTP enrollment
+// (POST /api/v1/admin/auth/totp)
+func (_ Unimplemented) CreateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateTotpEnrollment Confirm TOTP enrollment
+// (PUT /api/v1/admin/auth/totp)
+func (_ Unimplemented) UpdateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateRecoveryCodes Regenerate recovery codes
+// (POST /api/v1/admin/auth/totp/recovery-codes)
+func (_ Unimplemented) CreateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListUsers List admin users
+// (GET /api/v1/admin/auth/users)
+func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateUser Create an admin user
+// (POST /api/v1/admin/auth/users)
+func (_ Unimplemented) CreateUser(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetUser Get an admin user
+// (GET /api/v1/admin/auth/users/{userId})
+func (_ Unimplemented) GetUser(w http.ResponseWriter, r *http.Request, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateUser Update an admin user
+// (PUT /api/v1/admin/auth/users/{userId})
+func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreatePasswordReset Reset a user's password
+// (POST /api/v1/admin/auth/users/{userId}/password-reset)
+func (_ Unimplemented) CreatePasswordReset(w http.ResponseWriter, r *http.Request, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteUserTotp Reset a user's TOTP
+// (DELETE /api/v1/admin/auth/users/{userId}/totp)
+func (_ Unimplemented) DeleteUserTotp(w http.ResponseWriter, r *http.Request, userId UserId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetHealth Liveness check
 // (GET /api/v1/health)
@@ -88,6 +725,296 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// UpdatePassword operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSession operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSession operation middleware
+func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStepUp operation middleware
+func (siw *ServerInterfaceWrapper) CreateStepUp(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStepUp(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTotpVerification operation middleware
+func (siw *ServerInterfaceWrapper) CreateTotpVerification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTotpVerification(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTotpEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) CreateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTotpEnrollment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTotpEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTotpEnrollment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRecoveryCodes operation middleware
+func (siw *ServerInterfaceWrapper) CreateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRecoveryCodes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUsersParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUser operation middleware
+func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePasswordReset operation middleware
+func (siw *ServerInterfaceWrapper) CreatePasswordReset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePasswordReset(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteUserTotp operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUserTotp(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId UserId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUserTotp(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -219,11 +1146,1509 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/v1/admin/auth/session", wrapper.DeleteSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/admin/auth/session", wrapper.GetSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/session", wrapper.CreateSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/session/totp", wrapper.CreateTotpVerification)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/session/step-up", wrapper.CreateStepUp)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/v1/admin/auth/password", wrapper.UpdatePassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/totp", wrapper.CreateTotpEnrollment)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/v1/admin/auth/totp", wrapper.UpdateTotpEnrollment)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/totp/recovery-codes", wrapper.CreateRecoveryCodes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/admin/auth/users", wrapper.ListUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/users", wrapper.CreateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/admin/auth/users/{userId}", wrapper.GetUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/v1/admin/auth/users/{userId}", wrapper.UpdateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/admin/auth/users/{userId}/password-reset", wrapper.CreatePasswordReset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/v1/admin/auth/users/{userId}/totp", wrapper.DeleteUserTotp)
+	})
 
 	return r
 }
 
+type ForbiddenApplicationProblemPlusJSONResponse Problem
+
+type InvalidUserIdApplicationProblemPlusJSONResponse Problem
+
+type OwnAccountApplicationProblemPlusJSONResponse Problem
+
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type TooManyRequestsResponseHeaders struct {
+	RetryAfter *int
+}
+type TooManyRequestsApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers TooManyRequestsResponseHeaders
+}
+
+type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type UserNotFoundApplicationProblemPlusJSONResponse Problem
+
+type UpdatePasswordRequestObject struct {
+	Body *UpdatePasswordJSONRequestBody
+}
+
+type UpdatePasswordResponseObject interface {
+	VisitUpdatePasswordResponse(w http.ResponseWriter) error
+}
+
+type UpdatePassword204Response struct {
+}
+
+func (response UpdatePassword204Response) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdatePassword400ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePassword400ApplicationProblemPlusJSONResponse) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePassword401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePassword401ApplicationProblemPlusJSONResponse) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePassword403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePassword403ApplicationProblemPlusJSONResponse) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePassword429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePassword429ApplicationProblemPlusJSONResponse) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdatePassworddefaultApplicationProblemPlusJSONResponse) VisitUpdatePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSessionRequestObject struct {
+}
+
+type DeleteSessionResponseObject interface {
+	VisitDeleteSessionResponse(w http.ResponseWriter) error
+}
+
+type DeleteSession204Response struct {
+}
+
+func (response DeleteSession204Response) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSession401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteSession401ApplicationProblemPlusJSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSession403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteSession403ApplicationProblemPlusJSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSessiondefaultApplicationProblemPlusJSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSessionRequestObject struct {
+}
+
+type GetSessionResponseObject interface {
+	VisitGetSessionResponse(w http.ResponseWriter) error
+}
+
+type GetSession200JSONResponse SessionState
+
+func (response GetSession200JSONResponse) VisitGetSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSession401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetSession401ApplicationProblemPlusJSONResponse) VisitGetSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSessiondefaultApplicationProblemPlusJSONResponse) VisitGetSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessionRequestObject struct {
+	Body *CreateSessionJSONRequestBody
+}
+
+type CreateSessionResponseObject interface {
+	VisitCreateSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateSession200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type CreateSession200JSONResponse struct {
+	Body    SessionState
+	Headers CreateSession200ResponseHeaders
+}
+
+func (response CreateSession200JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSession400ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSession401ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSession403ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSession429ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSessiondefaultApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUpRequestObject struct {
+	Body *CreateStepUpJSONRequestBody
+}
+
+type CreateStepUpResponseObject interface {
+	VisitCreateStepUpResponse(w http.ResponseWriter) error
+}
+
+type CreateStepUp200JSONResponse StepUp
+
+func (response CreateStepUp200JSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUp400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateStepUp400ApplicationProblemPlusJSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUp401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepUp401ApplicationProblemPlusJSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUp403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepUp403ApplicationProblemPlusJSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUp429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response CreateStepUp429ApplicationProblemPlusJSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStepUpdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateStepUpdefaultApplicationProblemPlusJSONResponse) VisitCreateStepUpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerificationRequestObject struct {
+	Body *CreateTotpVerificationJSONRequestBody
+}
+
+type CreateTotpVerificationResponseObject interface {
+	VisitCreateTotpVerificationResponse(w http.ResponseWriter) error
+}
+
+type CreateTotpVerification200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type CreateTotpVerification200JSONResponse struct {
+	Body    SessionState
+	Headers CreateTotpVerification200ResponseHeaders
+}
+
+func (response CreateTotpVerification200JSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerification400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateTotpVerification400ApplicationProblemPlusJSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerification401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateTotpVerification401ApplicationProblemPlusJSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerification403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateTotpVerification403ApplicationProblemPlusJSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerification429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response CreateTotpVerification429ApplicationProblemPlusJSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpVerificationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateTotpVerificationdefaultApplicationProblemPlusJSONResponse) VisitCreateTotpVerificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpEnrollmentRequestObject struct {
+}
+
+type CreateTotpEnrollmentResponseObject interface {
+	VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error
+}
+
+type CreateTotpEnrollment200JSONResponse TotpEnrollment
+
+func (response CreateTotpEnrollment200JSONResponse) VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpEnrollment401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateTotpEnrollment401ApplicationProblemPlusJSONResponse) VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpEnrollment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateTotpEnrollment403ApplicationProblemPlusJSONResponse) VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpEnrollment409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateTotpEnrollment409ApplicationProblemPlusJSONResponse) VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTotpEnrollmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateTotpEnrollmentdefaultApplicationProblemPlusJSONResponse) VisitCreateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollmentRequestObject struct {
+	Body *UpdateTotpEnrollmentJSONRequestBody
+}
+
+type UpdateTotpEnrollmentResponseObject interface {
+	VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error
+}
+
+type UpdateTotpEnrollment200JSONResponse RecoveryCodes
+
+func (response UpdateTotpEnrollment200JSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollment400ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateTotpEnrollment400ApplicationProblemPlusJSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollment401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateTotpEnrollment401ApplicationProblemPlusJSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateTotpEnrollment403ApplicationProblemPlusJSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollment409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateTotpEnrollment409ApplicationProblemPlusJSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateTotpEnrollmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateTotpEnrollmentdefaultApplicationProblemPlusJSONResponse) VisitUpdateTotpEnrollmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecoveryCodesRequestObject struct {
+}
+
+type CreateRecoveryCodesResponseObject interface {
+	VisitCreateRecoveryCodesResponse(w http.ResponseWriter) error
+}
+
+type CreateRecoveryCodes200JSONResponse RecoveryCodes
+
+func (response CreateRecoveryCodes200JSONResponse) VisitCreateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecoveryCodes401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRecoveryCodes401ApplicationProblemPlusJSONResponse) VisitCreateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecoveryCodes403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRecoveryCodes403ApplicationProblemPlusJSONResponse) VisitCreateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecoveryCodesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateRecoveryCodesdefaultApplicationProblemPlusJSONResponse) VisitCreateRecoveryCodesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsersRequestObject struct {
+	Params ListUsersParams
+}
+
+type ListUsersResponseObject interface {
+	VisitListUsersResponse(w http.ResponseWriter) error
+}
+
+type ListUsers200JSONResponse UserPage
+
+func (response ListUsers200JSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsers400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListUsers400ApplicationProblemPlusJSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsers401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListUsers401ApplicationProblemPlusJSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListUsers403ApplicationProblemPlusJSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListUsersdefaultApplicationProblemPlusJSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserRequestObject struct {
+	Body *CreateUserJSONRequestBody
+}
+
+type CreateUserResponseObject interface {
+	VisitCreateUserResponse(w http.ResponseWriter) error
+}
+
+type CreateUser201JSONResponse UserCreated
+
+func (response CreateUser201JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUser400ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUser401ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUser403ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUser409ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateUserdefaultApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserRequestObject struct {
+	UserId UserId `json:"userId"`
+}
+
+type GetUserResponseObject interface {
+	VisitGetUserResponse(w http.ResponseWriter) error
+}
+
+type GetUser200JSONResponse User
+
+func (response GetUser200JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser400ApplicationProblemPlusJSONResponse struct {
+	InvalidUserIdApplicationProblemPlusJSONResponse
+}
+
+func (response GetUser400ApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetUser401ApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetUser403ApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUser404ApplicationProblemPlusJSONResponse struct {
+	UserNotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetUser404ApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetUserdefaultApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserRequestObject struct {
+	UserId UserId `json:"userId"`
+	Body   *UpdateUserJSONRequestBody
+}
+
+type UpdateUserResponseObject interface {
+	VisitUpdateUserResponse(w http.ResponseWriter) error
+}
+
+type UpdateUser200JSONResponse User
+
+func (response UpdateUser200JSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser400ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateUser400ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUser401ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUser403ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser404ApplicationProblemPlusJSONResponse struct {
+	UserNotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUser404ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateUser409ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateUserdefaultApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordResetRequestObject struct {
+	UserId UserId `json:"userId"`
+}
+
+type CreatePasswordResetResponseObject interface {
+	VisitCreatePasswordResetResponse(w http.ResponseWriter) error
+}
+
+type CreatePasswordReset200JSONResponse TemporaryPassword
+
+func (response CreatePasswordReset200JSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordReset400ApplicationProblemPlusJSONResponse struct {
+	InvalidUserIdApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePasswordReset400ApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordReset401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePasswordReset401ApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordReset403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePasswordReset403ApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordReset404ApplicationProblemPlusJSONResponse struct {
+	UserNotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePasswordReset404ApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordReset409ApplicationProblemPlusJSONResponse struct {
+	OwnAccountApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePasswordReset409ApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePasswordResetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreatePasswordResetdefaultApplicationProblemPlusJSONResponse) VisitCreatePasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotpRequestObject struct {
+	UserId UserId `json:"userId"`
+}
+
+type DeleteUserTotpResponseObject interface {
+	VisitDeleteUserTotpResponse(w http.ResponseWriter) error
+}
+
+type DeleteUserTotp204Response struct {
+}
+
+func (response DeleteUserTotp204Response) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteUserTotp400ApplicationProblemPlusJSONResponse struct {
+	InvalidUserIdApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserTotp400ApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotp401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserTotp401ApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotp403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserTotp403ApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotp404ApplicationProblemPlusJSONResponse struct {
+	UserNotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserTotp404ApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotp409ApplicationProblemPlusJSONResponse struct {
+	OwnAccountApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserTotp409ApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserTotpdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteUserTotpdefaultApplicationProblemPlusJSONResponse) VisitDeleteUserTotpResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetHealthRequestObject struct {
 }
@@ -265,6 +2690,51 @@ func (response GetHealthdefaultApplicationProblemPlusJSONResponse) VisitGetHealt
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// UpdatePassword Change own password
+	// (PUT /api/v1/admin/auth/password)
+	UpdatePassword(ctx context.Context, request UpdatePasswordRequestObject) (UpdatePasswordResponseObject, error)
+	// DeleteSession Sign out
+	// (DELETE /api/v1/admin/auth/session)
+	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
+	// GetSession Current session
+	// (GET /api/v1/admin/auth/session)
+	GetSession(ctx context.Context, request GetSessionRequestObject) (GetSessionResponseObject, error)
+	// CreateSession Sign in with username and password
+	// (POST /api/v1/admin/auth/session)
+	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
+	// CreateStepUp Re-verify with a TOTP code
+	// (POST /api/v1/admin/auth/session/step-up)
+	CreateStepUp(ctx context.Context, request CreateStepUpRequestObject) (CreateStepUpResponseObject, error)
+	// CreateTotpVerification Complete sign-in with a TOTP or recovery code
+	// (POST /api/v1/admin/auth/session/totp)
+	CreateTotpVerification(ctx context.Context, request CreateTotpVerificationRequestObject) (CreateTotpVerificationResponseObject, error)
+	// CreateTotpEnrollment Start TOTP enrollment
+	// (POST /api/v1/admin/auth/totp)
+	CreateTotpEnrollment(ctx context.Context, request CreateTotpEnrollmentRequestObject) (CreateTotpEnrollmentResponseObject, error)
+	// UpdateTotpEnrollment Confirm TOTP enrollment
+	// (PUT /api/v1/admin/auth/totp)
+	UpdateTotpEnrollment(ctx context.Context, request UpdateTotpEnrollmentRequestObject) (UpdateTotpEnrollmentResponseObject, error)
+	// CreateRecoveryCodes Regenerate recovery codes
+	// (POST /api/v1/admin/auth/totp/recovery-codes)
+	CreateRecoveryCodes(ctx context.Context, request CreateRecoveryCodesRequestObject) (CreateRecoveryCodesResponseObject, error)
+	// ListUsers List admin users
+	// (GET /api/v1/admin/auth/users)
+	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
+	// CreateUser Create an admin user
+	// (POST /api/v1/admin/auth/users)
+	CreateUser(ctx context.Context, request CreateUserRequestObject) (CreateUserResponseObject, error)
+	// GetUser Get an admin user
+	// (GET /api/v1/admin/auth/users/{userId})
+	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
+	// UpdateUser Update an admin user
+	// (PUT /api/v1/admin/auth/users/{userId})
+	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
+	// CreatePasswordReset Reset a user's password
+	// (POST /api/v1/admin/auth/users/{userId}/password-reset)
+	CreatePasswordReset(ctx context.Context, request CreatePasswordResetRequestObject) (CreatePasswordResetResponseObject, error)
+	// DeleteUserTotp Reset a user's TOTP
+	// (DELETE /api/v1/admin/auth/users/{userId}/totp)
+	DeleteUserTotp(ctx context.Context, request DeleteUserTotpRequestObject) (DeleteUserTotpResponseObject, error)
 	// GetHealth Liveness check
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -307,6 +2777,425 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// UpdatePassword operation middleware
+func (sh *strictHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	var request UpdatePasswordRequestObject
+
+	var body UpdatePasswordJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePassword(ctx, request.(UpdatePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePasswordResponseObject); ok {
+		if err := validResponse.VisitUpdatePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSession operation middleware
+func (sh *strictHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	var request DeleteSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSession(ctx, request.(DeleteSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSessionResponseObject); ok {
+		if err := validResponse.VisitDeleteSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSession operation middleware
+func (sh *strictHandler) GetSession(w http.ResponseWriter, r *http.Request) {
+	var request GetSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSession(ctx, request.(GetSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSessionResponseObject); ok {
+		if err := validResponse.VisitGetSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSession operation middleware
+func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	var request CreateSessionRequestObject
+
+	var body CreateSessionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSession(ctx, request.(CreateSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
+		if err := validResponse.VisitCreateSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStepUp operation middleware
+func (sh *strictHandler) CreateStepUp(w http.ResponseWriter, r *http.Request) {
+	var request CreateStepUpRequestObject
+
+	var body CreateStepUpJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStepUp(ctx, request.(CreateStepUpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStepUp")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStepUpResponseObject); ok {
+		if err := validResponse.VisitCreateStepUpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTotpVerification operation middleware
+func (sh *strictHandler) CreateTotpVerification(w http.ResponseWriter, r *http.Request) {
+	var request CreateTotpVerificationRequestObject
+
+	var body CreateTotpVerificationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTotpVerification(ctx, request.(CreateTotpVerificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTotpVerification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTotpVerificationResponseObject); ok {
+		if err := validResponse.VisitCreateTotpVerificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTotpEnrollment operation middleware
+func (sh *strictHandler) CreateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+	var request CreateTotpEnrollmentRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTotpEnrollment(ctx, request.(CreateTotpEnrollmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTotpEnrollment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTotpEnrollmentResponseObject); ok {
+		if err := validResponse.VisitCreateTotpEnrollmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTotpEnrollment operation middleware
+func (sh *strictHandler) UpdateTotpEnrollment(w http.ResponseWriter, r *http.Request) {
+	var request UpdateTotpEnrollmentRequestObject
+
+	var body UpdateTotpEnrollmentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTotpEnrollment(ctx, request.(UpdateTotpEnrollmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTotpEnrollment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTotpEnrollmentResponseObject); ok {
+		if err := validResponse.VisitUpdateTotpEnrollmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRecoveryCodes operation middleware
+func (sh *strictHandler) CreateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	var request CreateRecoveryCodesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRecoveryCodes(ctx, request.(CreateRecoveryCodesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRecoveryCodes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRecoveryCodesResponseObject); ok {
+		if err := validResponse.VisitCreateRecoveryCodesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUsers operation middleware
+func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
+	var request ListUsersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUsers(ctx, request.(ListUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUsersResponseObject); ok {
+		if err := validResponse.VisitListUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateUser operation middleware
+func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var request CreateUserRequestObject
+
+	var body CreateUserJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateUser(ctx, request.(CreateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateUserResponseObject); ok {
+		if err := validResponse.VisitCreateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUser operation middleware
+func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, userId UserId) {
+	var request GetUserRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUser(ctx, request.(GetUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserResponseObject); ok {
+		if err := validResponse.VisitGetUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateUser operation middleware
+func (sh *strictHandler) UpdateUser(w http.ResponseWriter, r *http.Request, userId UserId) {
+	var request UpdateUserRequestObject
+
+	request.UserId = userId
+
+	var body UpdateUserJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateUser(ctx, request.(UpdateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateUserResponseObject); ok {
+		if err := validResponse.VisitUpdateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePasswordReset operation middleware
+func (sh *strictHandler) CreatePasswordReset(w http.ResponseWriter, r *http.Request, userId UserId) {
+	var request CreatePasswordResetRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePasswordReset(ctx, request.(CreatePasswordResetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePasswordReset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePasswordResetResponseObject); ok {
+		if err := validResponse.VisitCreatePasswordResetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteUserTotp operation middleware
+func (sh *strictHandler) DeleteUserTotp(w http.ResponseWriter, r *http.Request, userId UserId) {
+	var request DeleteUserTotpRequestObject
+
+	request.UserId = userId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteUserTotp(ctx, request.(DeleteUserTotpRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteUserTotp")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteUserTotpResponseObject); ok {
+		if err := validResponse.VisitDeleteUserTotpResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHealth operation middleware
