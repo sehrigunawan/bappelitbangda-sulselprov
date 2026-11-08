@@ -42,7 +42,7 @@ Generated from `docs/prd/PRD.md` by `scripts/gen-traceability.sh`. Fill the issu
 | FR-30 | The system can display an activity calendar on the home page from agenda entries input by the admin. | Could | 3 Additions | not started |  |  | OQ-05 |
 | FR-31 | The system can display a prayer times (sholat) widget on the home page. | Could | 3 Additions | not started |  |  | OQ-05 |
 | FR-32 | The system can provide internal visit statistics (daily, monthly, most popular pages) on the admin dashboard. | Could | 3 Additions | not started |  |  |  |
-| FR-33 | The system must provide admin login with roles and per-module permissions for five roles: Super Admin, Humas Editor, Document Operator, PPID Officer, and Leadership (read-only); one user can hold more than one role, and the effective permissions are the union of the permissions of all their roles. | Must | 1 MVP | not started |  |  | OQ-10 |
+| FR-33 | The system must provide admin login with roles and per-module permissions for five roles: Super Admin, Humas Editor, Document Operator, PPID Officer, and Leadership (read-only); one user can hold more than one role, and the effective permissions are the union of the permissions of all their roles. | Must | 1 MVP | in progress | #26 | api/internal/server/auth_*_test.go | OQ-10 |
 | FR-34 | The system must allow the Humas Editor to manage publications: write, edit, save as draft, schedule, publish, and set category, tags, and main image. | Must | 1 MVP | not started |  |  |  |
 | FR-35 | The system must allow the Humas Editor to manage static pages and the navigation menu. | Must | 1 MVP | not started |  |  |  |
 | FR-36 | The system must allow the Document Operator to manage documents and categories: upload files, fill in title and date, choose category and information-type marker, and bulk upload. | Must | 1 MVP | not started |  |  |  |
@@ -57,7 +57,7 @@ Generated from `docs/prd/PRD.md` by `scripts/gen-traceability.sh`. Fill the issu
 | NFR-02 | API capacity and response time | Should | Should (not a release gate) | not started |  |  |  |
 | NFR-03 | WCAG 2.1 AA compliance on all public pages | Must | MVP gate | not started |  |  |  |
 | NFR-04 | Rendering and metadata | Must | MVP gate | not started |  |  |  |
-| NFR-05 | Application security | Must | MVP gate | not started |  |  |  |
+| NFR-05 | Application security | Must | MVP gate | in progress | #26 | api/internal/server/auth_*_test.go |  |
 | NFR-06 | File uploads | Must | MVP gate | not started |  |  | OQ-12, OQ-04 |
 | NFR-07 | Public form protection | Must | MVP gate | not started |  |  |  |
 | NFR-08 | Personal data protection under Law Number 27 of 2022 | Must | MVP gate | not started |  |  | OQ-15 |
@@ -69,4 +69,4 @@ Generated from `docs/prd/PRD.md` by `scripts/gen-traceability.sh`. Fill the issu
 | NFR-14 | Code quality and documentation | Should | Should (not a release gate) | not started |  |  |  |
 | NFR-15 | Observability | Should | Should (not a release gate) | not started |  |  |  |
 | NFR-16 | Language and format | Should | Should (not a release gate) | not started |  |  |  |
-| NFR-17 | Encryption of data in transit and at rest | Must | MVP gate | not started |  |  | OQ-16, OQ-17 |
+| NFR-17 | Encryption of data in transit and at rest | Must | MVP gate | in progress | #26 | api/internal/server/auth_*_test.go | OQ-16, OQ-17 |

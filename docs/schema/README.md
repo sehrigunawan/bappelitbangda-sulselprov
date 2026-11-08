@@ -4,6 +4,12 @@
 
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
+| [public.users](public.users.md) | 13 | Admin panel accounts. Never deleted; deactivated through disabled_at. totp_secret is ciphertext (keyring, version byte 0x01). | BASE TABLE |
+| [public.user_roles](public.user_roles.md) | 2 | Roles of a user (fixed set, see internal/authz). The primary key also serves as the foreign key index. | BASE TABLE |
+| [public.recovery_codes](public.recovery_codes.md) | 5 | One-time TOTP recovery codes, stored as argon2id hashes. Regeneration replaces the whole set. | BASE TABLE |
+| [public.login_throttle](public.login_throttle.md) | 5 | Failed-login counters per account (lowercased username) and per client IP, with the block deadline. | BASE TABLE |
+| [public.sessions](public.sessions.md) | 3 | Server-side sessions (alexedwards/scs pgxstore schema). The token is the cookie value. | BASE TABLE |
+| [public.data_keys](public.data_keys.md) | 4 | Envelope encryption data keys (DEK), wrapped with a key encryption key from the KEK file. The active DEK is the one with the highest id. | BASE TABLE |
 
 ## Stored procedures and functions
 
@@ -50,7 +56,53 @@
 ```mermaid
 erDiagram
 
+"public.user_roles" }o--|| "public.users" : "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+"public.recovery_codes" }o--|| "public.users" : "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
 
+"public.users" {
+  bigint id
+  text username
+  text full_name
+  text password_hash
+  boolean password_change_required
+  timestamp_with_time_zone disabled_at
+  integer session_epoch
+  bytea totp_secret
+  timestamp_with_time_zone totp_confirmed_at
+  bigint totp_last_step
+  timestamp_with_time_zone last_login_at
+  timestamp_with_time_zone created_at
+  timestamp_with_time_zone updated_at
+}
+"public.user_roles" {
+  bigint user_id FK
+  text role
+}
+"public.recovery_codes" {
+  bigint id
+  bigint user_id FK
+  text code_hash
+  timestamp_with_time_zone used_at
+  timestamp_with_time_zone created_at
+}
+"public.login_throttle" {
+  text scope
+  text key
+  integer failures
+  timestamp_with_time_zone blocked_until
+  timestamp_with_time_zone last_failure_at
+}
+"public.sessions" {
+  text token
+  bytea data
+  timestamp_with_time_zone expiry
+}
+"public.data_keys" {
+  smallint id
+  text kek_id
+  bytea wrapped_key
+  timestamp_with_time_zone created_at
+}
 ```
 
 ---

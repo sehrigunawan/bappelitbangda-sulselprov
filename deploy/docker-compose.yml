@@ -109,6 +109,9 @@ services:
     <<: *api
     profiles: [staging]
     env_file: ${ENV_FILE_STAGING:-/opt/bappelitbangda/.env.staging}
+    secrets:
+      - source: kek-staging
+        target: kek
     depends_on: { db-staging: { condition: service_healthy } }
     networks: { staging: { aliases: [api] } }
   web-staging:
@@ -136,6 +139,8 @@ volumes:
   pgdata-staging: {}
 
 secrets:
-  # Delivered outside the repo and outside the backup set. Not read by the application yet (KTP encryption is not built).
+  # Delivered outside the repo and outside the backup set. Mounted at /run/secrets/kek (KEK_FILE); staging uses its own key.
   kek:
-    file: ${KEK_FILE:-/opt/bappelitbangda/secrets/kek}
+    file: ${KEK_SECRET_FILE:-/opt/bappelitbangda/secrets/kek}
+  kek-staging:
+    file: ${KEK_SECRET_FILE_STAGING:-/opt/bappelitbangda/secrets/kek-staging}

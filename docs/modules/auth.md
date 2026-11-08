@@ -96,7 +96,7 @@ Every bullet tagged **[review]** is for the human reviewer.
   - Idle timeout 30 min (NFR-05, `AUTH_SESSION_IDLE_TIMEOUT`); absolute lifetime 12 h (ASVS L2 re-authentication, `AUTH_SESSION_LIFETIME`).
   - Cookie name `__Host-bpl_session` when `AUTH_COOKIE_SECURE=true`, `bpl_session` otherwise (dev over http).
   - Cookie flags: `HttpOnly`, `SameSite=Strict`, `Path=/`, no `Domain`; `Secure` follows `AUTH_COOKIE_SECURE`.
-  - `RenewToken` on every stage change, on step-up and on password change.
+  - `RenewToken` on every stage change, on step-up and on password change: only `createSession` calls plain `sm.RenewToken`; every later renewal (TOTP verification, enrollment confirmation, step-up, password change) keeps the original session absolute deadline (`AUTH_SESSION_LIFETIME`) rather than extending it.
   - Session keys: `user_id`, `stage`, `stage_at`, `session_epoch`, `step_up_at`.
   - A chi middleware `loadPrincipal` reads the user and roles on every request. If the user is disabled, the stored epoch differs from `users.session_epoch`, or a pending stage is older than `AUTH_PENDING_TTL`, it calls `Destroy` and the request continues as anonymous.
   - Clocks: throttle, pending TTL and step-up read `Deps.Now`. scs idle timeout and absolute lifetime (and the `pgxstore` expiry query) use the real clock, so their tests use short real durations. **[agent call]**
@@ -107,10 +107,10 @@ Every bullet tagged **[review]** is for the human reviewer.
   - A pending session is valid for `AUTH_PENDING_TTL` (default 10 min), measured from `stage_at`, which is set at login and again at every stage change. Each pending stage therefore gets its own 10 minutes; there are at most three. **[agent call]**
   - Only `authenticated` produces a `Principal`.
 - **Login throttle (FR-33). [review]**
-  - Keys: `('account', lower(username))` and `('ip', client IP)`. The account key is recorded whether or not the user exists, but only for usernames that match the username pattern; other values (including over-long ones) count against the IP key only. Rows for invented usernames are not purged: accepted risk, the admin is network-allowlisted. **[review]**
+  - Keys: `('account', lower(username))` and `('ip', client IP)`. The account key is recorded whether or not the user exists, but only for usernames that match the username pattern; other values (including over-long ones) count against the IP key only. Rows for invented usernames are not purged: accepted risk, the admin is network-allowlisted. The IP key counts failures of every account from one IP (the 5th failure across any accounts answers 429). **[review]**
   - Before any hash work, if either key has `blocked_until > now`, answer 429 with `Retry-After` set to the remaining whole seconds, rounded up.
   - On each failure, increment `failures` for both keys. If the key's `last_failure_at` is older than `AUTH_THROTTLE_MAX_DELAY` and it is not blocked, restart `failures` at 1 first (the counter decays; one typo a month never escalates). **[agent call]**
-  - Counted failures: wrong password at login, wrong TOTP or recovery code at `createTotpVerification`, wrong step-up code at `createStepUp`, wrong current password at `updatePassword`. The last two use the session user's account key and the client IP. **[agent call]**
+  - Counted failures: wrong password at login, wrong TOTP or recovery code at `createTotpVerification`, wrong step-up code at `createStepUp`, wrong current password at `updatePassword`. A step-up code reused in the same 30 s step counts as a failed attempt. The last two use the session user's account key and the client IP. **[agent call]**
   - When `failures >= AUTH_THROTTLE_FAILURES` (5), set `blocked_until = now + min(AUTH_THROTTLE_BASE_DELAY * 2^(failures - threshold), AUTH_THROTTLE_MAX_DELAY)`. That gives 15 min, then 30, then 60, capped at 24 h. Never a permanent lock. The failing request that sets `blocked_until` itself answers 429 with `Retry-After`; failures below the threshold answer 401 (or 400 for `updatePassword`).
   - A successful full login (stage `authenticated`) deletes the account row only. The IP row is kept so one valid account cannot reset an attacker's IP counter; it decays by the rule above. **[review]**
   - The client IP is `X-Real-IP` only when `AUTH_TRUST_PROXY_HEADER=true` (nginx sets it); otherwise the host part of `RemoteAddr`.
@@ -121,7 +121,7 @@ Every bullet tagged **[review]** is for the human reviewer.
   - Rehash on successful login when the stored parameters differ.
   - A `Hasher` type limits concurrency with a buffered channel of capacity 2 and acquires it with the request context.
   - Policy (ASVS 2.1): 12 to 128 characters counted as Unicode code points (no normalization), no composition rules; not equal to the username and not containing it (case-insensitive); not in the embedded common-password list `api/internal/auth/common-passwords.txt`, compared case-insensitively. A policy failure answers 400 whose `detail` is exactly one of the labels `Minimal 12 karakter.`, `Kata sandi terlalu umum.`, `Kata sandi tidak boleh memuat nama pengguna.` (and `Maksimal 128 karakter.`); the FE shows `detail`. **[agent call]**
-  - Common-password list source: SecLists `Passwords/Common-Credentials/10k-most-common.txt` (MIT; the path exists in the SecLists repo), filtered to entries of 12 or more characters, with a license line in the file header. The filtered list is short; the BE lane may switch to a larger file in the same directory (for example `100k-most-used-passwords-NCSC.txt`) if fewer than 100 entries remain. **[agent call]**
+  - Common-password list source: SecLists `Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt` (MIT), filtered to entries of 12 or more characters (about 1200 entries; the 10k list had only 10 entries of 12+ chars), with a license line in the file header. **[agent call]**
   - Temporary passwords: 16 characters drawn with `crypto/rand` from the lowercase Crockford base32 alphabet `0123456789abcdefghjkmnpqrstvwxyz` (80 bits), shown once; they set `password_change_required`.
 - **TOTP and recovery codes. [review]**
   - `github.com/pquerna/otp`: RFC 6238, SHA-1, 6 digits, 30 s period, skew +-1 step, issuer `Bappelitbangda Sulsel`, account name = username, 20-byte secret.
@@ -135,7 +135,7 @@ Every bullet tagged **[review]** is for the human reviewer.
   - A `stepUp: true` rule requires `now - step_up_at <= AUTH_STEP_UP_TTL` (default 10 min); otherwise 403 with detail `Verifikasi ulang dengan kode autentikator diperlukan.` The session's `stepUpExpiresAt` is `step_up_at + AUTH_STEP_UP_TTL`, and `null` once past. A successful password change clears `step_up_at`.
   - `ppid` reuses the same rule flag for personal-data access.
   - A user without confirmed TOTP gets 403 from step-up.
-- **CSRF. [review]** `http.NewCrossOriginProtection()` (stdlib, uses `Sec-Fetch-Site`, else compares the `Origin` and `Host` hostnames, allows safe methods) wraps `/api/v1/admin/`. Its deny handler writes a 403 Problem with detail `Permintaan lintas situs ditolak.` This works together with `SameSite=Strict`. No CSRF token and no trusted origins: nginx forwards `Host` (`proxy_set_header Host $host`) and the dev server proxies `/api` (`web/vite.config.ts`), so browsers are same-origin in both.
+- **CSRF. [review]** `http.NewCrossOriginProtection()` (stdlib, uses `Sec-Fetch-Site`, else compares the `Origin` host (with port) to `Host`, allows safe methods) wraps `/api/v1/admin/`. Its deny handler writes a 403 Problem with detail `Permintaan lintas situs ditolak.` This works together with `SameSite=Strict`. No CSRF token and no trusted origins: nginx forwards the client's `Host` unchanged for the admin location (`proxy_set_header Host $http_host`, so a non-default port such as staging's 8081 still matches the browser's `Origin`) and the dev server proxies `/api` (`web/vite.config.ts`), so browsers are same-origin in both.
 - **No caching.** Responses under `/api/v1/admin/` get `Cache-Control: no-store`.
 - **Envelope encryption (NFR-17). [review]** New package `api/internal/keyring`. Nonce and key handling are never left to an agent unreviewed.
   - KEK file at `KEK_FILE`: one key per line, `<kek-id> <base64 std of 32 bytes>`; `#` starts a comment.
@@ -143,7 +143,7 @@ Every bullet tagged **[review]** is for the human reviewer.
   - DEK: 32 random bytes. `wrapped_key = AES-256-GCM(KEK, random 12-byte nonce, DEK, aad="data_keys:"+kek_id)`, stored as `nonce||ct`; the AAD binds the wrapped key to the KEK id stored beside it, and rewrap changes both together. **[agent call]**
   - Field ciphertext: `0x01 || uint16 big-endian data_key_id || 12-byte random nonce || GCM ciphertext+tag`. The caller AAD binds the value to its column and row.
   - API:
-    - `func Load(ctx context.Context, q *dbgen.Queries, kekFile, activeID string) (*Keyring, error)`; `q` is built on the `DATABASE_URL` pool.
+    - `func Load(ctx context.Context, pool *pgxpool.Pool, kekFile, activeID string) (*Keyring, error)`: uses `pool` for the advisory-locked first-DEK transaction and queries.
     - `func (k *Keyring) Seal(plaintext, aad []byte) ([]byte, error)`
     - `func (k *Keyring) Open(ciphertext, aad []byte) ([]byte, error)`
   - Startup fails with an error naming the missing `kek_id` (never key bytes) when a `data_keys` row cannot be unwrapped, or when `KEK_ACTIVE_ID` is not in the KEK file.
@@ -153,7 +153,7 @@ Every bullet tagged **[review]** is for the human reviewer.
 - **Logging.** slog events `auth.login.succeeded`, `auth.login.failed`, `auth.login.throttled`, `auth.logout`, `auth.totp.failed`, `auth.totp.enrolled`, `auth.recovery_codes.regenerated`, `auth.stepup.succeeded`, `auth.stepup.failed`, `auth.password.changed`, `auth.user.created`, `auth.user.updated`, `auth.password.reset`, `auth.totp.reset`. Fields: `username`, `user_id`, `client_ip`, `request_id`. The FR-39 activity log belongs to the `audit` module; nothing here writes an audit table.
 - **Edge rules.**
   - `createSession` while any session exists destroys it first, then starts a new one.
-  - A successful `updatePassword` increments `session_epoch` (other sessions end), stores the new epoch in the current session, re-resolves the stage (it may become `totp_enrollment_required`), clears `step_up_at` and renews the token, keeping that session.
+  - A successful `updatePassword` increments `session_epoch` (other sessions end), stores the new epoch in the current session, re-resolves the stage (it may become `totp_enrollment_required`), clears `step_up_at` and renews the token (keeping the absolute deadline), keeping that session.
   - A repeated `createTotpEnrollment` before confirmation overwrites the pending secret.
   - `username` is immutable; `UserUpdate` has no username field.
   - `listUsers` orders by `username` ascending.
@@ -161,7 +161,7 @@ Every bullet tagged **[review]** is for the human reviewer.
   - Resetting a password or TOTP, and disabling a user, bumps the target's `session_epoch`. `createPasswordReset` and `deleteUserTotp` on the caller's own id answer 409 (use `updatePassword` and the CLI), so an admin cannot log themselves out by accident.
   - A role change does not bump `session_epoch` (roles are read on every request).
   - Every `UPDATE users` sets `updated_at = now()` in the query.
-- **Authorization failures.** `authorize` and `loadPrincipal` return sentinel errors (`ErrUnauthenticated`, `ErrForbidden`, `ErrStepUpRequired`, a throttle error carrying the retry seconds) that `responseErrorHandler` in `api/internal/server/errors.go` maps to Problems, like `ErrNotImplemented` today; they are expected failures, not bugs, so they are not logged at error level. **[agent call]**
+- **Authorization failures.** `authorize` and `loadPrincipal` return sentinel errors (`ErrUnauthenticated`, `ErrForbidden`, `ErrStepUpRequired`) that `responseErrorHandler` in `api/internal/server/errors.go` maps to Problems, like `ErrNotImplemented` today; they are expected failures, not bugs, so they are not logged at error level. Handlers return typed generated responses for 400/401/403/404/409/429 directly, including 429 with `Retry-After`; no throttling happens in `authorize`, so the throttle sentinel error is omitted. **[agent call]**
   - No session, or a pending session facing a rule that needs `authenticated` or a permission: 401. A session at a stage the rule does not list (for example an authenticated user calling `createTotpVerification`, or `password_change_required` calling `createTotpEnrollment`): 403. **[agent call]**
 - **Not in this module.** NFR-05's CSP, HSTS and TLS settings belong to nginx and the Wave 6 MVP gates (`docs/handover/known-gaps.md`). The enrollment QR is a `data:` image, so the CSP for `/admin` must allow `img-src data:`.
 
@@ -175,8 +175,8 @@ Env vars, read in `api/cmd/api/main.go` with `os.Getenv` (the existing pattern):
 - Durations use `time.ParseDuration`; booleans and integers use `strconv`. An invalid value fails startup. `main.go` parses these into a plain `server.Config` struct (one field per variable) through a helper `configFromEnv(getenv func(string) string) (server.Config, error)`; `server.DefaultConfig()` returns the defaults for tests. **[agent call]**
 
 The BE lane:
-- adds these to `.env.example` (fake values, `AUTH_COOKIE_SECURE=false`) and to `deploy/env.example` (`AUTH_TRUST_PROXY_HEADER=true`, `KEK_FILE=/run/secrets/kek`, `KEK_ACTIVE_ID=kek-1`);
-- removes the "Not read by the application yet" comment in `deploy/docker-compose.yml` on the `kek` secret.
+- adds these to `.env.example` (fake values, `AUTH_COOKIE_SECURE=false`) and adds `DATABASE_URL` and the auth variables to `deploy/env.example` (`DATABASE_URL=postgres://app:...`, `AUTH_TRUST_PROXY_HEADER=true`, `KEK_FILE=/run/secrets/kek`, `KEK_ACTIVE_ID=kek-1`, `AUTH_COOKIE_SECURE=true`);
+- mounts the KEK secret at `/run/secrets/kek` in `deploy/docker-compose.yml` using compose host path variables `KEK_SECRET_FILE` and `KEK_SECRET_FILE_STAGING`, gives staging its own KEK secret (`kek-staging`), and replaces the comment with `# Delivered outside the repo and outside the backup set. Mounted at /run/secrets/kek (KEK_FILE); staging uses its own key.`
 
 Server wiring: `server.NewHandler(logger *slog.Logger, deps Deps) http.Handler` with `type Deps struct{ Pool *pgxpool.Pool; Keyring *keyring.Keyring; Config Config; Now func() time.Time }`. Update every caller (`api/cmd/api/main.go`, `api/internal/server/*_test.go`). `GetHealth` stays DB-free. Non-DB tests pass `Deps{Config: DefaultConfig(), Now: time.Now}` with a nil `Pool`; the admin subrouter is mounted only when `Pool` is non-nil. Sessions always use `pgxstore` (no in-memory store), so session tests need `TEST_DATABASE_URL`. Test keyrings use a random KEK written to `t.TempDir()`. **[agent call]**
 
@@ -191,10 +191,10 @@ The BE lane fills the runbook sections "Add an admin", "TOTP break-glass" and "K
 
 ## API
 
-Operations live in [`openapi.yaml`](../../openapi.yaml) (tag `auth`), which is authoritative for statuses, schemas and examples. This table names them and their own outcomes. In addition, every operation except `getSession` can answer 403 (`Forbidden`: wrong stage, missing permission, or a cross-origin request), and `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` answer 400 for a `userId` that is not an integer or is below 1. All paths are under `/api/v1/admin/auth`. Every operation has `default: Problem`. The Auth column uses: `public`; `any session` (including pending stages); a stage name; `perm <area>.<level>`; `+step-up`. The 401 Problem detail is `Sesi tidak valid atau telah berakhir.`; the 403 detail is `Akses ditolak.`
+Operations live in [`openapi.yaml`](../../openapi.yaml) (tag `auth`), which is authoritative for statuses, schemas and examples. This table names them and their own outcomes. In addition, every operation except `getSession` can answer 403 (`Forbidden`: wrong stage, missing permission, or a cross-origin request), and `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` answer 400 for a `userId` that is not an integer or is below 1. All paths are under `/api/v1/admin/auth`. Every operation has `default: Problem`. The Auth column uses: `public`; `any session` (including pending stages); a stage name; `perm <area>.<level>`; `+step-up`. The 401 Problem detail for `createSession` is `Nama pengguna atau kata sandi salah.`; for every other operation (including a wrong or replayed code at `createTotpVerification` or `createStepUp`) it is `Sesi tidak valid atau telah berakhir.`; the 403 detail is `Akses ditolak.`
 
 Contract conventions **[agent call]**:
-- 401, 403 and 429 are listed explicitly on every operation that can return them, as `$ref` to new shared `components/responses` `Unauthorized`, `Forbidden` and `TooManyRequests` (the last carries the `RetryAfter` header). The server produces them from sentinel errors in `authorize`, not from handler return values (see "Authorization failures").
+- 401, 403 and 429 are listed explicitly on every operation that can return them, as `$ref` to new shared `components/responses` `Unauthorized`, `Forbidden` and `TooManyRequests` (the last carries the `RetryAfter` header). The server produces unauthenticated, forbidden and step-up responses from sentinel errors in `authorize`, while handlers return typed responses directly (including 429 with `Retry-After`).
 - `components/securitySchemes.cookieAuth`: `apiKey` in a cookie named `__Host-bpl_session` (the production name; the description states the dev name `bpl_session`). Every operation has `security: [{cookieAuth: []}]` except `createSession`, which has `security: []`. `createSession` and `createTotpVerification` document the `Set-Cookie` response header.
 - `createSession` and `getSession` 200 carry one named example per `SessionStage` value, so the FE fixtures cover all four stages.
 - The Problem schema has only `title`, `status`, `detail`. This module does not add fields: the FE tells errors apart by status plus the exact Indonesian `detail` text listed here. Decided at contract review (2026-11-08): Problem gets no machine-readable `code`.
@@ -282,58 +282,59 @@ Written before the BE and FE lanes start. Each lane PR fills the "Test name" col
 
 | Id | Behaviour | Layer | Test name |
 |---|---|---|---|
-| D1 | `users` rejects username `Ab` and a duplicate username | `db` | |
-| D2 | `user_roles` rejects an unknown role and a duplicate `(user_id, role)` | `db` | |
-| D3 | `users` rejects `totp_confirmed_at` without `totp_secret` | `db` | |
-| D4 | `app` has no DELETE on `users` or `data_keys`, and cannot UPDATE `data_keys.id` or `created_at` (`privileges.sql`) | `db` | |
-| D5 | One `queries.sql` case per new query (the BE lane lists them) | `db` | |
-| A1 | `Can` matches all 45 cells of the matrix (unit) | `api` | |
-| A2 | Union for 3 role pairs: `humas_editor`+`document_operator`; `document_operator`+`ppid_officer` (documents = manage, so M overrides V); `ppid_officer`+`leadership` (unit) | `api` | |
-| A3 | Every `StrictServerInterface` method (reflection) has an `operationRules` entry, and `GetHealth` is public (unit) | `api` | |
-| A4 | `listUsers`: anonymous gives 401, `humas_editor` gives 403, `super_admin` gives 200 | `api` | |
-| A5 | An operation absent from `operationRules` gives 403 (the test injects a rule map) | `api` | |
-| A6 | Correct login for `humas_editor` without TOTP gives 200 `authenticated`. Set-Cookie is HttpOnly, SameSite=Strict, and Secure when configured. The token differs from the pre-login one | `api` | |
-| A7 | Wrong password and unknown username give byte-identical 401 bodies | `api` | |
-| A8 | The 5th wrong password answers 429 with `Retry-After: 900` (failures 1 to 4 answer 401); a 6th attempt with the correct password also gives 429. After the clock advances 15 min the correct password gives 200 | `api` | |
-| A9 | After a block expires, one more failure answers 429 with `Retry-After: 1800`; the delay is capped at 24 h; a failure more than 24 h after the previous one restarts the count at 1 | `api` | |
-| A10 | 5 failures across 5 usernames from one IP give 429 for a 6th username | `api` | |
-| A11 | Success deletes the account throttle row and keeps the IP row | `api` | |
-| A12 | A disabled user gets 401 at login; an existing session of a disabled user gets 401 on the next request | `api` | |
-| A13 | Stage order: a TOTP user gets `totp_required`; a new `ppid_officer` gets `password_change_required` then `totp_enrollment_required`. Admin operations give 401 while pending | `api` | |
-| A14 | A pending stage older than 10 min gives 401 | `api` | |
-| A15 | TOTP verify: valid gives `authenticated` with a renewed token; wrong gives 401; replay of the same code gives 401; the 5th wrong code gives 429 | `api` | |
-| A16 | A recovery code works once; its reuse gives 401 | `api` | |
-| A17 | Enrollment returns secret, URI and PNG. Confirming returns 10 codes in `xxxxx-xxxxx` format. `users.totp_secret` starts with `0x01` and is not the base32 secret. It opens with the right AAD and fails with another user's AAD | `api` | |
-| A18 | `createRecoveryCodes` invalidates the old codes | `api` | |
-| A19 | Password policy rejects 11 characters, 129 characters, a listed common password and a password containing the username (400). It accepts a 12-character Unicode password | `api` | |
-| A20 | The stored hash has prefix `$argon2id$v=19$m=19456,t=2,p=1$`. A hash with older parameters is rehashed on login | `api` | |
-| A21 | `Hasher` never runs more than 2 hashes concurrently (5 goroutines, instrumented hook) (unit) | `api` | |
-| A22 | Idle timeout: with `AUTH_SESSION_IDLE_TIMEOUT=1s`, a request after 1.5 s gives 401. Absolute lifetime: with `AUTH_SESSION_LIFETIME=2s` and activity every 0.5 s, the request after 2.5 s gives 401 (real clock) | `api` | |
-| A23 | Logout, then the old cookie gives 401 | `api` | |
-| A24 | A POST with `Origin: https://evil.example` gives a 403 Problem; a same-origin POST passes | `api` | |
-| A25 | Admin responses carry `Cache-Control: no-store` | `api` | |
-| A26 | `createPasswordReset`, `createRecoveryCodes` and `deleteUserTotp` without step-up give 403 with the step-up detail. After `createStepUp`, `createPasswordReset` gives 200 and the target's old session gives 401 (epoch). After 10 min it gives 403 again | `api` | |
-| A27 | `createStepUp` for a user without TOTP gives 403 | `api` | |
-| A28 | `updateUser` gives 409 for self-demotion, self-disable and the last active Super Admin; `createPasswordReset` and `deleteUserTotp` on the caller's own id give 409 | `api` | |
-| A29 | `createUser` gives 409 for a duplicate, 400 for an unknown role, 400 for empty roles. 201 returns a temporary password that works, and the new user is in `password_change_required` | `api` | |
-| A30 | `listUsers` gives 400 for `page=0`, `page=abc` and `pageSize=51`. Defaults are page 1, size 10, and `total` is correct | `api` | |
-| A31 | `getUser` with an unknown id gives 404 | `api` | |
-| A32 | After `deleteUserTotp`, a mandatory-role user's next login reaches `totp_enrollment_required` | `api` | |
-| A33 | `SessionState.permissions` of a two-role user equals `Effective` | `api` | |
-| A34 | Captured logs of a failed login and a TOTP failure contain no password, code or session token | `api` | |
-| A35 | Keyring: `Load` fails naming the kek id when the KEK is missing. `rotate-dek` then `Open` of old ciphertext works. `rewrap` then `Load` with only the new KEK works | `api` | |
-| A36 | CLI `admin create` creates a `super_admin` with `password_change_required`; `admin reset-totp` clears TOTP and the recovery codes | `api` | |
-| A37 | Wrong stage: no session gives 401; a pending session on a permission operation gives 401; an `authenticated` session on `createTotpVerification`, and `password_change_required` on `createTotpEnrollment`, give 403 | `api` | |
-| A38 | `updatePassword`: a wrong current password gives 400 `Kata sandi saat ini salah.` and counts toward the throttle; success ends the user's other sessions, keeps this one with a renewed token and the new epoch, and re-resolves the stage | `api` | |
-| A39 | `createTotpEnrollment` after confirmation gives 409; `updateTotpEnrollment` with a wrong code gives 400, with no pending enrollment gives 409; a repeated `createTotpEnrollment` before confirmation replaces the pending secret | `api` | |
-| A40 | A wrong step-up code gives 401 and counts toward the throttle; a correct code used at login cannot be reused for step-up in the same 30 s step | `api` | |
-| A41 | `X-Real-IP` sets the throttle IP only when `AUTH_TRUST_PROXY_HEADER=true`; otherwise `RemoteAddr` is used and the header is ignored | `api` | |
-| A42 | `AUTH_COOKIE_SECURE=false` yields cookie `bpl_session` without `Secure`; `true` yields `__Host-bpl_session` with `Secure` | `api` | |
-| A43 | `configFromEnv` applies the defaults of "Configuration and CLI" and fails on an invalid duration, integer or boolean (unit) | `api` | |
-| A44 | `createSession` with an unparsable body gives 400; a username that does not match the pattern gives the same 401 as a wrong password and counts against the IP key only | `api` | |
-| A45 | A cross-origin POST without a session gives 403, not 401 (middleware order) | `api` | |
-| A46 | `GET /api/v1/health` with an invalid or foreign session cookie gives 200 and makes no session query | `api` | |
-| A47 | `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` give 400 for `userId` `abc` and `0` | `api` | |
+| D1 | `users` rejects username `Ab` and a duplicate username | `db` | `constraints.sql D1` |
+| D2 | `user_roles` rejects an unknown role and a duplicate `(user_id, role)` | `db` | `constraints.sql D2` |
+| D3 | `users` rejects `totp_confirmed_at` without `totp_secret` | `db` | `constraints.sql D3` |
+| D4 | `app` has no DELETE on `users` or `data_keys`, and cannot UPDATE `data_keys.id` or `created_at` (`privileges.sql`) | `db` | `privileges.sql D4` |
+| D5 | One `queries.sql` case per new query (the BE lane lists them) | `db` | `queries.sql (one block per query)` |
+| A1 | `Can` matches all 45 cells of the matrix (unit) | `api` | `TestCanMatrix` |
+| A2 | Union for 3 role pairs: `humas_editor`+`document_operator`; `document_operator`+`ppid_officer` (documents = manage, so M overrides V); `ppid_officer`+`leadership` (unit) | `api` | `TestEffectiveUnion` |
+| A3 | Every `StrictServerInterface` method (reflection) has an `operationRules` entry, and `GetHealth` is public (unit) | `api` | `TestOperationRulesCoverInterface` |
+| A4 | `listUsers`: anonymous gives 401, `humas_editor` gives 403, `super_admin` gives 200 | `api` | `TestListUsersAuthorization` |
+| A5 | An operation absent from `operationRules` gives 403 (the test injects a rule map) | `api` | `TestUnlistedOperationForbidden` |
+| A6 | Correct login for `humas_editor` without TOTP gives 200 `authenticated`. Set-Cookie is HttpOnly, SameSite=Strict, and Secure when configured. The token differs from the pre-login one | `api` | `TestLoginSetsSessionCookie` |
+| A7 | Wrong password and unknown username give byte-identical 401 bodies | `api` | `TestLoginFailureBodiesIdentical` |
+| A8 | The 5th wrong password answers 429 with `Retry-After: 900` (failures 1 to 4 answer 401); a 6th attempt with the correct password also gives 429. After the clock advances 15 min the correct password gives 200 | `api` | `TestThrottleBlocksAfterFiveFailures` |
+| A9 | After a block expires, one more failure answers 429 with `Retry-After: 1800`; the delay is capped at 24 h; a failure more than 24 h after the previous one restarts the count at 1 | `api` | `TestThrottleBackoffAndDecay` |
+| A10 | 5 failures across 5 usernames from one IP: the first 4 answer 401, the 5th answers 429, and a 6th username also gives 429 | `api` | `TestThrottlePerIP` |
+| A11 | Success deletes the account throttle row and keeps the IP row | `api` | `TestThrottleSuccessClearsAccountOnly` |
+| A12 | A disabled user gets 401 at login; an existing session of a disabled user gets 401 on the next request | `api` | `TestDisabledUser` |
+| A13 | Stage order: a TOTP user gets `totp_required`; a new `ppid_officer` gets `password_change_required` then `totp_enrollment_required`. Admin operations give 401 while pending | `api` | `TestLoginStageOrder` |
+| A14 | A pending stage older than 10 min gives 401 | `api` | `TestPendingStageExpires` |
+| A15 | TOTP verify: valid gives `authenticated` with a renewed token; wrong gives 401; replay of the same code gives 401; the 5th wrong code gives 429 | `api` | `TestTotpVerification` |
+| A16 | A recovery code works once; its reuse gives 401; two sessions presenting the same code at the same time cannot both succeed | `api` | `TestRecoveryCodeSingleUse`, `TestRecoveryCodeConcurrentUse` |
+| A17 | Enrollment returns secret, URI and PNG. Confirming returns 10 codes in `xxxxx-xxxxx` format. `users.totp_secret` starts with `0x01` and is not the base32 secret. It opens with the right AAD and fails with another user's AAD | `api` | `TestTotpEnrollment` |
+| A18 | `createRecoveryCodes` invalidates the old codes | `api` | `TestRecoveryCodesRegenerate` |
+| A19 | Password policy rejects 11 characters, 129 characters, a listed common password and a password containing the username (400). It accepts a 12-character Unicode password | `api` | `TestPasswordPolicy` |
+| A20 | The stored hash has prefix `$argon2id$v=19$m=19456,t=2,p=1$`. A hash with older parameters is rehashed on login | `api` | `TestPasswordHashParameters` |
+| A21 | `Hasher` never runs more than 2 hashes concurrently (5 goroutines, instrumented hook) (unit) | `api` | `TestHasherConcurrencyLimit` |
+| A22 | Idle timeout: with `AUTH_SESSION_IDLE_TIMEOUT=1s`, a request after 1.5 s gives 401. Absolute lifetime: with `AUTH_SESSION_LIFETIME=2s` and activity every 0.5 s, the request after 2.5 s gives 401 (real clock) | `api` | `TestSessionTimeouts` |
+| A23 | Logout, then the old cookie gives 401 | `api` | `TestLogout` |
+| A24 | A POST with `Origin: https://evil.example` gives a 403 Problem; a same-origin POST passes | `api` | `TestCrossOriginRejected` |
+| A25 | Admin responses carry `Cache-Control: no-store` | `api` | `TestAdminNoStore` |
+| A26 | `createPasswordReset`, `createRecoveryCodes` and `deleteUserTotp` without step-up give 403 with the step-up detail. After `createStepUp`, `createPasswordReset` gives 200 and the target's old session gives 401 (epoch). After 10 min it gives 403 again | `api` | `TestStepUpGate` |
+| A27 | `createStepUp` for a user without TOTP gives 403 | `api` | `TestStepUpWithoutTotp` |
+| A28 | `updateUser` gives 409 for self-demotion, self-disable and the last active Super Admin; `createPasswordReset` and `deleteUserTotp` on the caller's own id give 409 | `api` | `TestUpdateUserConflicts` |
+| A29 | `createUser` gives 409 for a duplicate, 400 for an unknown role, 400 for empty roles. 201 returns a temporary password that works, and the new user is in `password_change_required` | `api` | `TestCreateUser` |
+| A30 | `listUsers` gives 400 for `page=0`, `page=abc` and `pageSize=51`. Defaults are page 1, size 10, and `total` is correct | `api` | `TestListUsersPaging` |
+| A31 | `getUser` with an unknown id gives 404 | `api` | `TestGetUserNotFound` |
+| A32 | After `deleteUserTotp`, a mandatory-role user's next login reaches `totp_enrollment_required` | `api` | `TestDeleteUserTotpForcesEnrollment` |
+| A33 | `SessionState.permissions` of a two-role user equals `Effective` | `api` | `TestSessionPermissionsUnion` |
+| A34 | Captured logs of a failed login and a TOTP failure contain no password, code or session token | `api` | `TestAuthLogsHaveNoSecrets` |
+| A35 | Keyring: `Load` fails naming the kek id when the KEK is missing. `rotate-dek` then `Open` of old ciphertext works. `rewrap` then `Load` with only the new KEK works | `api` | `TestLoad, TestSealOpen, TestKeysCLI` |
+| A36 | CLI `admin create` creates a `super_admin` with `password_change_required`; `admin reset-totp` clears TOTP and the recovery codes | `api` | `TestAdminCLI` |
+| A37 | Wrong stage: no session gives 401; a pending session on a permission operation gives 401; an `authenticated` session on `createTotpVerification`, and `password_change_required` on `createTotpEnrollment`, give 403 | `api` | `TestStageRules` |
+| A38 | `updatePassword`: a wrong current password gives 400 `Kata sandi saat ini salah.` and counts toward the throttle; success ends the user's other sessions, keeps this one with a renewed token and the new epoch, and re-resolves the stage | `api` | `TestUpdatePassword` |
+| A39 | `createTotpEnrollment` after confirmation gives 409; `updateTotpEnrollment` with a wrong code gives 400, with no pending enrollment gives 409; a repeated `createTotpEnrollment` before confirmation replaces the pending secret | `api` | `TestTotpEnrollmentConflicts` |
+| A40 | A wrong step-up code gives 401 and counts toward the throttle; a correct code used at login cannot be reused for step-up in the same 30 s step | `api` | `TestStepUpCodeChecks` |
+| A41 | `X-Real-IP` sets the throttle IP only when `AUTH_TRUST_PROXY_HEADER=true`; otherwise `RemoteAddr` is used and the header is ignored | `api` | `TestClientIPSource` |
+| A42 | `AUTH_COOKIE_SECURE=false` yields cookie `bpl_session` without `Secure`; `true` yields `__Host-bpl_session` with `Secure` | `api` | `TestCookieNameFollowsSecureFlag` |
+| A43 | `configFromEnv` applies the defaults of "Configuration and CLI" and fails on an invalid duration, integer or boolean (unit) | `api` | `TestConfigFromEnv` |
+| A44 | `createSession` with an unparsable body gives 400; a username that does not match the pattern gives the same 401 as a wrong password and counts against the IP key only | `api` | `TestLoginMalformedInput` |
+| A45 | A cross-origin POST without a session gives 403, not 401 (middleware order) | `api` | `TestCrossOriginBeforeAuth` |
+| A46 | `GET /api/v1/health` with an invalid or foreign session cookie gives 200 and makes no session query | `api` | `TestHealthSkipsSessions` |
+| A47 | `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` give 400 for `userId` `abc` and `0` | `api` | `TestUserIdValidation` |
+| A48 | Renewals after login (TOTP verification, step-up) keep the absolute lifetime: with AUTH_SESSION_LIFETIME=2s, a step-up at 1 s and a request at 2.5 s give 401 | `api` | `TestSessionTimeouts` |
 | W1 | The `(panel)` guard maps 401 to a redirect to `/admin/masuk?kembali=...`, and each pending stage to its page (injected fetch, fixtures typed from the contract examples) | `web-load` | |
 | W2 | A stage page with a mismatching stage redirects | `web-load` | |
 | W3 | `kembali` values `//evil`, `https://x` and `/publik` resolve to `/admin` | `web-load` | |
@@ -361,7 +362,7 @@ Chapter numbers from ASVS 4.0.3; confirm each against the standard during review
 | V2.5 credential recovery | A16, A26, A36 |
 | V2.8 one-time verifiers | A15, A17 |
 | V3.2 session binding | A6, A15 |
-| V3.3 logout and timeout | A22, A23 |
+| V3.3 logout and timeout | A22, A23, A48 |
 | V3.4 cookie attributes | A6, A42 |
 | V4.1 deny by default | A3, A5, A37 |
 | V4.2 CSRF | A24, A45 |

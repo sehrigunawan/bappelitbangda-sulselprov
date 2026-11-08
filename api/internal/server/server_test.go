@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kindaMid72/bappelitbangda-sulselprov/api/internal/server"
 )
@@ -22,7 +23,7 @@ func TestHealth(t *testing.T) {
 		{"unknown path", http.MethodGet, "/api/v1/nope", http.StatusNotFound, ""},
 		{"wrong method", http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 	}
-	h := server.NewHandler(slog.New(slog.DiscardHandler))
+	h := server.NewHandler(slog.New(slog.DiscardHandler), server.Deps{Config: server.DefaultConfig(), Now: time.Now})
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()

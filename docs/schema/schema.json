@@ -1,6 +1,741 @@
 {
   "name": "bappelitbangda",
-  "tables": null,
+  "tables": [
+    {
+      "name": "public.users",
+      "type": "BASE TABLE",
+      "comment": "Admin panel accounts. Never deleted; deactivated through disabled_at. totp_secret is ciphertext (keyring, version byte 0x01).",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "username",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "password_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "password_change_required",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "disabled_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "session_epoch",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "totp_secret",
+          "type": "bytea",
+          "nullable": true
+        },
+        {
+          "name": "totp_confirmed_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "totp_last_step",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "last_login_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "users_pkey",
+          "def": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)",
+          "table": "public.users",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "users_username_unique",
+          "def": "CREATE UNIQUE INDEX users_username_unique ON public.users USING btree (username)",
+          "table": "public.users",
+          "columns": [
+            "username"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "users_created_at_not_null",
+          "type": "n",
+          "def": "NOT NULL created_at",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "created_at"
+          ]
+        },
+        {
+          "name": "users_full_name_length",
+          "type": "CHECK",
+          "def": "CHECK (((char_length(full_name) \u003e= 1) AND (char_length(full_name) \u003c= 100)))",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "full_name"
+          ]
+        },
+        {
+          "name": "users_full_name_not_null",
+          "type": "n",
+          "def": "NOT NULL full_name",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "full_name"
+          ]
+        },
+        {
+          "name": "users_id_not_null",
+          "type": "n",
+          "def": "NOT NULL id",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "users_password_change_required_not_null",
+          "type": "n",
+          "def": "NOT NULL password_change_required",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "password_change_required"
+          ]
+        },
+        {
+          "name": "users_password_hash_not_null",
+          "type": "n",
+          "def": "NOT NULL password_hash",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "password_hash"
+          ]
+        },
+        {
+          "name": "users_session_epoch_not_null",
+          "type": "n",
+          "def": "NOT NULL session_epoch",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "session_epoch"
+          ]
+        },
+        {
+          "name": "users_totp_confirmed_needs_secret",
+          "type": "CHECK",
+          "def": "CHECK (((totp_confirmed_at IS NULL) OR (totp_secret IS NOT NULL)))",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "totp_confirmed_at",
+            "totp_secret"
+          ]
+        },
+        {
+          "name": "users_updated_at_not_null",
+          "type": "n",
+          "def": "NOT NULL updated_at",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "updated_at"
+          ]
+        },
+        {
+          "name": "users_username_format",
+          "type": "CHECK",
+          "def": "CHECK ((username ~ '^[a-z0-9._-]{3,32}$'::text))",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "username"
+          ]
+        },
+        {
+          "name": "users_username_not_null",
+          "type": "n",
+          "def": "NOT NULL username",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "username"
+          ]
+        },
+        {
+          "name": "users_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "users_username_unique",
+          "type": "UNIQUE",
+          "def": "UNIQUE (username)",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "username"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.user_roles",
+      "type": "BASE TABLE",
+      "comment": "Roles of a user (fixed set, see internal/authz). The primary key also serves as the foreign key index.",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "user_roles_pkey",
+          "def": "CREATE UNIQUE INDEX user_roles_pkey ON public.user_roles USING btree (user_id, role)",
+          "table": "public.user_roles",
+          "columns": [
+            "user_id",
+            "role"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "user_roles_role_known",
+          "type": "CHECK",
+          "def": "CHECK ((role = ANY (ARRAY['super_admin'::text, 'humas_editor'::text, 'document_operator'::text, 'ppid_officer'::text, 'leadership'::text])))",
+          "table": "public.user_roles",
+          "referenced_table": "",
+          "columns": [
+            "role"
+          ]
+        },
+        {
+          "name": "user_roles_role_not_null",
+          "type": "n",
+          "def": "NOT NULL role",
+          "table": "public.user_roles",
+          "referenced_table": "",
+          "columns": [
+            "role"
+          ]
+        },
+        {
+          "name": "user_roles_user_id_not_null",
+          "type": "n",
+          "def": "NOT NULL user_id",
+          "table": "public.user_roles",
+          "referenced_table": "",
+          "columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "user_roles_user_id_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+          "table": "public.user_roles",
+          "referenced_table": "public.users",
+          "columns": [
+            "user_id"
+          ],
+          "referenced_columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "user_roles_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (user_id, role)",
+          "table": "public.user_roles",
+          "referenced_table": "",
+          "columns": [
+            "user_id",
+            "role"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.recovery_codes",
+      "type": "BASE TABLE",
+      "comment": "One-time TOTP recovery codes, stored as argon2id hashes. Regeneration replaces the whole set.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "user_id",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "code_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "recovery_codes_pkey",
+          "def": "CREATE UNIQUE INDEX recovery_codes_pkey ON public.recovery_codes USING btree (id)",
+          "table": "public.recovery_codes",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "recovery_codes_user_id_idx",
+          "def": "CREATE INDEX recovery_codes_user_id_idx ON public.recovery_codes USING btree (user_id)",
+          "table": "public.recovery_codes",
+          "columns": [
+            "user_id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "recovery_codes_code_hash_not_null",
+          "type": "n",
+          "def": "NOT NULL code_hash",
+          "table": "public.recovery_codes",
+          "referenced_table": "",
+          "columns": [
+            "code_hash"
+          ]
+        },
+        {
+          "name": "recovery_codes_created_at_not_null",
+          "type": "n",
+          "def": "NOT NULL created_at",
+          "table": "public.recovery_codes",
+          "referenced_table": "",
+          "columns": [
+            "created_at"
+          ]
+        },
+        {
+          "name": "recovery_codes_id_not_null",
+          "type": "n",
+          "def": "NOT NULL id",
+          "table": "public.recovery_codes",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "recovery_codes_user_id_not_null",
+          "type": "n",
+          "def": "NOT NULL user_id",
+          "table": "public.recovery_codes",
+          "referenced_table": "",
+          "columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "recovery_codes_user_id_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+          "table": "public.recovery_codes",
+          "referenced_table": "public.users",
+          "columns": [
+            "user_id"
+          ],
+          "referenced_columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "recovery_codes_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.recovery_codes",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.login_throttle",
+      "type": "BASE TABLE",
+      "comment": "Failed-login counters per account (lowercased username) and per client IP, with the block deadline.",
+      "columns": [
+        {
+          "name": "scope",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "failures",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "blocked_until",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "last_failure_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "login_throttle_pkey",
+          "def": "CREATE UNIQUE INDEX login_throttle_pkey ON public.login_throttle USING btree (scope, key)",
+          "table": "public.login_throttle",
+          "columns": [
+            "scope",
+            "key"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "login_throttle_failures_not_null",
+          "type": "n",
+          "def": "NOT NULL failures",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "failures"
+          ]
+        },
+        {
+          "name": "login_throttle_key_not_null",
+          "type": "n",
+          "def": "NOT NULL key",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "key"
+          ]
+        },
+        {
+          "name": "login_throttle_last_failure_at_not_null",
+          "type": "n",
+          "def": "NOT NULL last_failure_at",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "last_failure_at"
+          ]
+        },
+        {
+          "name": "login_throttle_scope_known",
+          "type": "CHECK",
+          "def": "CHECK ((scope = ANY (ARRAY['account'::text, 'ip'::text])))",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "scope"
+          ]
+        },
+        {
+          "name": "login_throttle_scope_not_null",
+          "type": "n",
+          "def": "NOT NULL scope",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "scope"
+          ]
+        },
+        {
+          "name": "login_throttle_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (scope, key)",
+          "table": "public.login_throttle",
+          "referenced_table": "",
+          "columns": [
+            "scope",
+            "key"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.sessions",
+      "type": "BASE TABLE",
+      "comment": "Server-side sessions (alexedwards/scs pgxstore schema). The token is the cookie value.",
+      "columns": [
+        {
+          "name": "token",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "data",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "expiry",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sessions_pkey",
+          "def": "CREATE UNIQUE INDEX sessions_pkey ON public.sessions USING btree (token)",
+          "table": "public.sessions",
+          "columns": [
+            "token"
+          ]
+        },
+        {
+          "name": "sessions_expiry_idx",
+          "def": "CREATE INDEX sessions_expiry_idx ON public.sessions USING btree (expiry)",
+          "table": "public.sessions",
+          "columns": [
+            "expiry"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "sessions_data_not_null",
+          "type": "n",
+          "def": "NOT NULL data",
+          "table": "public.sessions",
+          "referenced_table": "",
+          "columns": [
+            "data"
+          ]
+        },
+        {
+          "name": "sessions_expiry_not_null",
+          "type": "n",
+          "def": "NOT NULL expiry",
+          "table": "public.sessions",
+          "referenced_table": "",
+          "columns": [
+            "expiry"
+          ]
+        },
+        {
+          "name": "sessions_token_not_null",
+          "type": "n",
+          "def": "NOT NULL token",
+          "table": "public.sessions",
+          "referenced_table": "",
+          "columns": [
+            "token"
+          ]
+        },
+        {
+          "name": "sessions_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (token)",
+          "table": "public.sessions",
+          "referenced_table": "",
+          "columns": [
+            "token"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.data_keys",
+      "type": "BASE TABLE",
+      "comment": "Envelope encryption data keys (DEK), wrapped with a key encryption key from the KEK file. The active DEK is the one with the highest id.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "kek_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "wrapped_key",
+          "type": "bytea",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "data_keys_pkey",
+          "def": "CREATE UNIQUE INDEX data_keys_pkey ON public.data_keys USING btree (id)",
+          "table": "public.data_keys",
+          "columns": [
+            "id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "data_keys_created_at_not_null",
+          "type": "n",
+          "def": "NOT NULL created_at",
+          "table": "public.data_keys",
+          "referenced_table": "",
+          "columns": [
+            "created_at"
+          ]
+        },
+        {
+          "name": "data_keys_id_not_null",
+          "type": "n",
+          "def": "NOT NULL id",
+          "table": "public.data_keys",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "data_keys_kek_id_not_null",
+          "type": "n",
+          "def": "NOT NULL kek_id",
+          "table": "public.data_keys",
+          "referenced_table": "",
+          "columns": [
+            "kek_id"
+          ]
+        },
+        {
+          "name": "data_keys_wrapped_key_not_null",
+          "type": "n",
+          "def": "NOT NULL wrapped_key",
+          "table": "public.data_keys",
+          "referenced_table": "",
+          "columns": [
+            "wrapped_key"
+          ]
+        },
+        {
+          "name": "data_keys_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.data_keys",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "table": "public.user_roles",
+      "columns": [
+        "user_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "public.recovery_codes",
+      "columns": [
+        "user_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    }
+  ],
   "functions": [
     {
       "name": "public.set_limit",

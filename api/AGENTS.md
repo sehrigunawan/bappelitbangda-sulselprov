@@ -6,4 +6,4 @@
 - KTP numbers and TOTP secrets are ciphertext with a key id; never log them; never choose nonce or key handling yourself; draft only, a human explains every line.
 - Return errors with context; no panics in handlers; no global state.
 - Errors: expected failures (404, 409, validation) are typed response objects from the generated interface, with the `Problem` body. A returned `error` is a bug: `internal/server/errors.go` logs it with the request id and answers a generic 500. Contract-PR stubs return `ErrNotImplemented` (501).
-- Tests: table-driven; DB tests use the throwaway database from `make test-full` (`TEST_DATABASE_URL`) and skip under `testing.Short()`.
+- DB tests call dbtest.New(t) (one database cloned from the migrated template, role app plus a superuser pool) and skip under testing.Short().

@@ -26,6 +26,9 @@ func TestResponseErrorHandler(t *testing.T) {
 		{"not implemented", ErrNotImplemented, http.StatusNotImplemented, `{"title":"Not Implemented","status":501}`, false},
 		{"wrapped not implemented", fmt.Errorf("list: %w", ErrNotImplemented), http.StatusNotImplemented, `{"title":"Not Implemented","status":501}`, false},
 		{"unexpected error", errors.New("db down"), http.StatusInternalServerError, `{"title":"Internal Server Error","status":500}`, true},
+		{"unauthenticated", ErrUnauthenticated, http.StatusUnauthorized, `{"title":"Unauthorized","status":401,"detail":"Sesi tidak valid atau telah berakhir."}`, false},
+		{"forbidden", ErrForbidden, http.StatusForbidden, `{"title":"Forbidden","status":403,"detail":"Akses ditolak."}`, false},
+		{"step-up required", ErrStepUpRequired, http.StatusForbidden, `{"title":"Forbidden","status":403,"detail":"Verifikasi ulang dengan kode autentikator diperlukan."}`, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

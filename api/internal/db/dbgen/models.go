@@ -3,3 +3,63 @@
 //   sqlc v1.31.1
 
 package dbgen
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// Envelope encryption data keys (DEK), wrapped with a key encryption key from the KEK file. The active DEK is the one with the highest id.
+type DataKey struct {
+	ID         int16
+	KekID      string
+	WrappedKey []byte
+	CreatedAt  pgtype.Timestamptz
+}
+
+// Failed-login counters per account (lowercased username) and per client IP, with the block deadline.
+type LoginThrottle struct {
+	Scope         string
+	Key           string
+	Failures      int32
+	BlockedUntil  pgtype.Timestamptz
+	LastFailureAt pgtype.Timestamptz
+}
+
+// One-time TOTP recovery codes, stored as argon2id hashes. Regeneration replaces the whole set.
+type RecoveryCode struct {
+	ID        int64
+	UserID    int64
+	CodeHash  string
+	UsedAt    pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
+// Server-side sessions (alexedwards/scs pgxstore schema). The token is the cookie value.
+type Session struct {
+	Token  string
+	Data   []byte
+	Expiry pgtype.Timestamptz
+}
+
+// Admin panel accounts. Never deleted; deactivated through disabled_at. totp_secret is ciphertext (keyring, version byte 0x01).
+type User struct {
+	ID                     int64
+	Username               string
+	FullName               string
+	PasswordHash           string
+	PasswordChangeRequired bool
+	DisabledAt             pgtype.Timestamptz
+	SessionEpoch           int32
+	TotpSecret             []byte
+	TotpConfirmedAt        pgtype.Timestamptz
+	TotpLastStep           pgtype.Int8
+	LastLoginAt            pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+}
+
+// Roles of a user (fixed set, see internal/authz). The primary key also serves as the foreign key index.
+type UserRole struct {
+	UserID int64
+	Role   string
+}
