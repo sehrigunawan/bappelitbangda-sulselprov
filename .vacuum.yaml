@@ -1,0 +1,7 @@
+# Contract lint for openapi.yaml (make contract-lint). Rules set to error block `make verify`.
+extends: [[vacuum:oas, recommended]]
+rules:
+  operation-operationId: error
+  operation-tags: error
+  operation-description: error
+  oas3-missing-example: error

@@ -28,13 +28,40 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
-// Health defines model for Health.
+// Health Liveness report.
+//
+// Example: {"status":"ok"}
 type Health struct {
+	// Status Always `ok` while the process runs.
+	//
+	// Example: ok
 	Status HealthStatus `json:"status"`
 }
 
-// HealthStatus defines model for Health.Status.
+// HealthStatus Always `ok` while the process runs.
+//
+// Example: ok
 type HealthStatus string
+
+// Problem Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+//
+// Example: {"detail":"Publikasi tidak ditemukan.","status":404,"title":"Not Found"}
+type Problem struct {
+	// Detail Explanation specific to this occurrence. Omitted for server errors.
+	//
+	// Example: Publikasi tidak ditemukan.
+	Detail *string `json:"detail,omitempty"`
+
+	// Status The HTTP status code.
+	//
+	// Example: 404
+	Status int `json:"status"`
+
+	// Title Short, human-readable summary of the problem type.
+	//
+	// Example: Not Found
+	Title string `json:"title"`
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -196,6 +223,8 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	return r
 }
 
+type ProblemApplicationProblemPlusJSONResponse Problem
+
 type GetHealthRequestObject struct {
 }
 
@@ -213,6 +242,23 @@ func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetHealthdefaultApplicationProblemPlusJSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
 	return err
 }

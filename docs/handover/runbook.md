@@ -4,7 +4,7 @@ GitHub builds and proves a release; it never deploys. There are no production cr
 
 ## Release
 
-1. `main` is green, docs are updated, PR titles are clear (release notes come from merged PR titles).
+1. The promotion PR `development` → `main` is merged (merge commit); `main` is green, docs are updated, PR titles are clear (release notes come from merged PR titles).
 2. A maintainer creates an annotated tag `vMAJOR.MINOR.PATCH` on a commit of `main` (`v0.x` until go-live). Agents never tag.
 3. `release.yml` checks the tag is on `main`, reruns `make verify-full` and runs `make release VERSION=...`. The result is a draft GitHub Release holding `deploy-bundle-vX.Y.Z.tar.gz` (images, `deploy/`, migrations, `release-manifest.json`), SBOMs and `SHA256SUMS`. A maintainer reviews and publishes it.
 

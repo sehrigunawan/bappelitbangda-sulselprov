@@ -49,6 +49,9 @@ jobs:
           package-manager-cache: false # release artifacts: no dependency cache (cache poisoning)
       - run: npm ci
         working-directory: web
+      - name: Playwright browser for component tests
+        run: npx --no-install playwright install --with-deps chromium
+        working-directory: web
       - name: Verify
         run: make verify-full
       - name: Build release bundle

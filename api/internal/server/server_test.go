@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ func TestHealth(t *testing.T) {
 		{"unknown path", http.MethodGet, "/api/v1/nope", http.StatusNotFound, ""},
 		{"wrong method", http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 	}
-	h := server.NewHandler()
+	h := server.NewHandler(slog.New(slog.DiscardHandler))
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()

@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liveness check */
+        /**
+         * Liveness check
+         * @description Reports that the process is running. It does not check the database.
+         */
         get: operations["getHealth"];
         put?: never;
         post?: never;
@@ -25,12 +28,64 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Liveness report.
+         * @example {
+         *       "status": "ok"
+         *     }
+         */
         Health: {
-            /** @enum {string} */
+            /**
+             * @description Always `ok` while the process runs.
+             * @example ok
+             * @enum {string}
+             */
             status: "ok";
         };
+        /**
+         * @description Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+         * @example {
+         *       "title": "Not Found",
+         *       "status": 404,
+         *       "detail": "Publikasi tidak ditemukan."
+         *     }
+         */
+        Problem: {
+            /**
+             * @description Short, human-readable summary of the problem type.
+             * @example Not Found
+             */
+            title: string;
+            /**
+             * @description The HTTP status code.
+             * @example 404
+             */
+            status: number;
+            /**
+             * @description Explanation specific to this occurrence. Omitted for server errors.
+             * @example Publikasi tidak ditemukan.
+             */
+            detail?: string;
+        };
     };
-    responses: never;
+    responses: {
+        /** @description Error (RFC 9457 problem details) */
+        Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "title": "Not Found",
+                 *       "status": 404,
+                 *       "detail": "Publikasi tidak ditemukan."
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -53,9 +108,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "status": "ok"
+                     *     }
+                     */
                     "application/json": components["schemas"]["Health"];
                 };
             };
+            default: components["responses"]["Problem"];
         };
     };
 }

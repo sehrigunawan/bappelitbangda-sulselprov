@@ -7,11 +7,15 @@ info:
     client are generated from it (`make gen`). Walking skeleton: health endpoint only.
 servers:
   - url: /
+tags:
+  - name: system
+    description: Service health and other operational endpoints.
 paths:
   /api/v1/health:
     get:
       operationId: getHealth
       summary: Liveness check
+      description: Reports that the process is running. It does not check the database.
       tags: [system]
       responses:
         "200":
@@ -20,12 +24,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+              example:
+                status: ok
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   schemas:
     Health:
       type: object
+      description: Liveness report.
       required: [status]
       properties:
         status:
           type: string
+          description: Always `ok` while the process runs.
           enum: [ok]
+          example: ok
+      example:
+        status: ok
+    Problem:
+      type: object
+      description: Error body (RFC 9457 problem details). Every operation returns it for every non-success status.
+      required: [title, status]
+      properties:
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+          example: Not Found
+        status:
+          type: integer
+          description: The HTTP status code.
+          example: 404
+        detail:
+          type: string
+          description: Explanation specific to this occurrence. Omitted for server errors.
+          example: Publikasi tidak ditemukan.
+      example:
+        title: Not Found
+        status: 404
+        detail: Publikasi tidak ditemukan.
+  responses:
+    Problem:
+      description: Error (RFC 9457 problem details)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            title: Not Found
+            status: 404
+            detail: Publikasi tidak ditemukan.

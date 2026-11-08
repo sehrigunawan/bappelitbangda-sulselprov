@@ -1,9 +1,16 @@
-## What and why (FR/NFR ids, issue link)
+## What and why (FR/NFR ids, issue link: `Closes #<issue-id>`)
 
 ## Contract / migration changes
 - [ ] none
-- [ ] openapi.yaml changed (separate small PR first, link:)
-- [ ] migration added (never edited an existing one)
+- [ ] openapi.yaml changed (contract PR: spec, openapi.yaml, generated code, 501 stubs; no handler logic)
+- [ ] migration added (never edited an existing one; BE PR only)
+
+## Module spec (link)
+
+## Red output (tests failing before implementation)
+<!-- Behaviour changes: paste the focused run (`make test-api ...`, `make db-test`, `make test-web ...`) from before the implementation, and say who confirmed each failure was for the right reason. Contract PRs and docs-only PRs: "n/a". -->
+
+## Plan (task list; lane PRs only)
 
 ## `make verify` output (paste the tail; `make verify-full` if SQL/migrations changed)
 

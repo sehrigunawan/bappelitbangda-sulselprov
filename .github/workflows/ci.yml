@@ -2,7 +2,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, development]
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -58,6 +58,9 @@ jobs:
       - name: Web dependencies
         run: npm ci
         working-directory: web
+      - name: Playwright browser for component tests
+        run: npx --no-install playwright install --with-deps chromium
+        working-directory: web
       - name: Verify
         run: make verify-full
       - name: Upload logs on failure
@@ -106,3 +109,39 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/zizmor"
           "$RUNNER_TEMP/zizmor/bin/pip" install --quiet zizmor==1.31.1
           "$RUNNER_TEMP/zizmor/bin/zizmor" --offline --min-severity medium .github/workflows
+  promotion-source:
+    name: promotion-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: PRs into main must come from this repository's development branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$BASE_REF" = "main" ] && { [ "$HEAD_REF" != "development" ] || [ "$HEAD_REPO" != "$REPO" ]; }; then
+            echo "ERROR: only development may be merged into main (docs/workflow/team-and-agents.md, Promotion)."; exit 1
+          fi
+          echo "promotion-source: OK"
+  contract-diff:
+    name: contract-diff
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: |
+            api/go.sum
+            tools/go.sum
+      - name: Breaking changes against the base branch (report only, never fails)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: make contract-diff BASE="origin/${BASE_REF}" >> "$GITHUB_STEP_SUMMARY"

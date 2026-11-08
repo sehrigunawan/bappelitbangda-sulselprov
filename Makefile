@@ -26,11 +26,15 @@ PG_SUPER_URL ?= postgres://postgres:postgres@localhost:5432
 MIGRATE_URL  ?= postgres://migrator:migrator@localhost:5432/bappelitbangda_dev?sslmode=disable
 export PSQL PG_SUPER_URL GOOSE
 
-.PHONY: tools gen gen-check lint test test-full vuln secret-scan build docker-build release smoke \
-        verify verify-full docs-check \
+.PHONY: tools web-browsers gen gen-check lint test test-full test-api test-web vuln secret-scan build docker-build release smoke \
+        verify verify-full docs-check skills-check contract-lint contract-diff \
         db-up db-down db-init db-migrate db-new db-generate db-test db-docs db-erd db-docs-check
 
-tools: $(GOLANGCI_LINT)
+tools: $(GOLANGCI_LINT) web-browsers
+
+# Chromium for the web component tests (vitest browser mode). CI uses `--with-deps` to install system libraries too.
+web-browsers:
+	cd web && npx --no-install playwright install chromium
 
 $(GOLANGCI_LINT):
 	GOBIN=$(BIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -63,6 +67,27 @@ test-full: db-init
 	cd api && ../scripts/db-throwaway.sh go test -race ./...
 	cd web && CI=true npm run test
 
+# usage: make test-api RUN=TestPublications PKG=./internal/server/...   (focused run on a throwaway DB)
+RUN ?= .
+PKG ?= ./...
+test-api: db-init
+	cd api && ../scripts/db-throwaway.sh go test -race -count=1 -run '$(RUN)' $(PKG)
+
+# usage: make test-web FILE=src/routes/publications
+test-web:
+	cd web && CI=true npx --no-install vitest run $(FILE)
+
+# ---- API contract ----
+contract-lint:
+	cd api && $(GOTOOL) vacuum lint --ruleset ../.vacuum.yaml --details --no-banner --no-update-check ../$(OPENAPI)
+
+# usage: make contract-diff BASE=origin/development   (report only; never fails on breaking changes)
+BASE ?= origin/development
+contract-diff:
+	@tmp="$$(mktemp --suffix=.yaml)"; trap 'rm -f "$$tmp"' EXIT; \
+	git show "$(BASE):$(OPENAPI)" > "$$tmp"; \
+	cd api && $(GOTOOL) oasdiff breaking "$$tmp" ../$(OPENAPI) --format markdown
+
 vuln:
 	cd api && $(GOTOOL) govulncheck ./...
 	cd web && npm audit --omit=dev --audit-level=high
@@ -77,12 +102,16 @@ build:
 	(cd web && npm run build); \
 	echo "build time: $$(( $$(date +%s) - $$start ))s"
 
-verify: gen-check lint test vuln
+verify: gen-check skills-check contract-lint lint test vuln
 
-verify-full: gen-check lint test-full vuln db-test db-docs-check docs-check
+verify-full: gen-check skills-check contract-lint lint test-full vuln db-test db-docs-check docs-check
 
 docs-check:
 	bash scripts/check-docs.sh
+
+# Agent skills layout: .agents/skills/<name> canonical, .claude/skills/<name> symlink (see .agents/skills/README.md).
+skills-check:
+	bash scripts/check-skills.sh
 
 # ---- database ----
 db-up:

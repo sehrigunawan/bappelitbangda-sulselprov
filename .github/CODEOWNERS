@@ -1,7 +1,9 @@
 # Every path is owned by both developers, so the other person is always the required reviewer
 # and a PR author cannot deadlock their own PR (docs/workflow/team-and-agents.md, Roles).
 #
-# TODO (human): when the second developer joins, add their handle on the same line:
+# TODO (human): when the second developer joins, add their handle on the same line, then run
+# `scripts/github-apply-settings.sh OWNER/REPO --apply --approvals 1`; this makes the other developer's review
+# required on development and main:
 #   * @kindaMid72 @SECOND_DEVELOPER_HANDLE
-# Until then the ruleset runs with 0 required approvals (see scripts/github-apply-settings.sh --approvals).
+# Until then the rulesets run with 0 required approvals (see scripts/github-apply-settings.sh --approvals).
 * @kindaMid72

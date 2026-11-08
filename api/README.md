@@ -21,7 +21,7 @@ Database settings are added with the first feature that uses the database. See `
 ## Layout
 
 - `cmd/api` entry point; `internal/server` handlers; `internal/api` and `internal/db/dbgen` are **generated**.
-- `db/migrations` goose migrations (never edit one that is on `main`), `db/queries` sqlc queries, `db/tests` SQL tests, `db/init` dev roles.
+- `db/migrations` goose migrations (never edit one that is on `development`), `db/queries` sqlc queries, `db/tests` SQL tests, `db/init` dev roles.
 - Dev tools (goose, sqlc, oapi-codegen, govulncheck, tbls, gitleaks) are pinned in `../tools/go.mod`; use `make`.
 
 ## Test

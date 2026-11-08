@@ -24,3 +24,6 @@ coverage/
 .idea/
 .vscode/
 .bin/
+
+# lane plans (short-lived; see .agents/skills/writing-plans)
+.plans/

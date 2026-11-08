@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -22,11 +23,16 @@ func (Server) GetHealth(_ context.Context, _ api.GetHealthRequestObject) (api.Ge
 	return api.GetHealth200JSONResponse{Status: api.Ok}, nil
 }
 
-// NewHandler builds the router with the generated routes and base middleware.
-func NewHandler() http.Handler {
+// NewHandler builds the router with the generated routes and base middleware. Errors returned by
+// handlers are mapped to problem+json (errors.go) and logged to logger.
+func NewHandler(logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
-	strict := api.NewStrictHandler(Server{}, nil)
-	return api.HandlerFromMux(strict, r)
+	strict := api.NewStrictHandlerWithOptions(Server{}, nil, api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  requestErrorHandler,
+		ResponseErrorHandlerFunc: responseErrorHandler(logger),
+	})
+	// ErrorHandlerFunc handles query/path parameter binding errors, which the strict options above do not see.
+	return api.HandlerWithOptions(strict, api.ChiServerOptions{BaseRouter: r, ErrorHandlerFunc: requestErrorHandler})
 }

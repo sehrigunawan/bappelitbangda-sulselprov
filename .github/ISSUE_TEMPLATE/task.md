@@ -7,6 +7,10 @@ labels: task
 
 **FR/NFR ids**
 
+**Module spec** docs/modules/<module>.md (or "none")
+
+**Lane** contract / BE / FE / other
+
 **Files expected to change**
 
 **Acceptance checks (how we know it is done)**

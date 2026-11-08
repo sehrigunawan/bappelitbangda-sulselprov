@@ -29,7 +29,7 @@ func run(logger *slog.Logger) error {
 	}
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           server.NewHandler(),
+		Handler:           server.NewHandler(logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
