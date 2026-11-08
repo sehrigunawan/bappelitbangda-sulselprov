@@ -58,8 +58,8 @@ flowchart TD
 
 | Wave | Module | FR / NFR ids | Depends on | Why here (unlocks / constraints) |
 |---|---|---|---|---|
-| 1 (MVP) | `auth` (security lane) | FR-33, NFR-05, NFR-17 | none | Bootstraps `pgxpool` and `dbgen.Queries` on `Server`, `scs` sessions, `argon2id`, login delay, 5 x 9 `Can(user, perm)` RBAC, TOTP (mandatory for Super Admin and PPID Officer) and AES-256-GCM envelope encryption. Unblocks every `/api/v1/admin/*` endpoint. |
-| 1 (MVP) | `media` | FR-38, NFR-06 | `auth` | Bootstraps the `Page`/`PageSize` OpenAPI params and `oapi-codegen/runtime`. Magic-byte validation, safe disk storage, thumbnails (5 s or less) and alt-text rules used by all content and PPID uploads. |
+| 1 (MVP) | `auth` (security lane) | FR-33, NFR-05, NFR-17 | none | Bootstraps `pgxpool` and `dbgen.Queries` on `Server`, `scs` sessions, `argon2id`, login delay, 5 x 9 `Can(user, perm)` RBAC, TOTP (mandatory for Super Admin and PPID Officer) and AES-256-GCM envelope encryption. Unblocks every `/api/v1/admin/*` endpoint. Bootstraps the Page/PageSize OpenAPI params and oapi-codegen/runtime (listUsers, getUser), the KEK keyring and the admin CLI (create admin, TOTP break-glass, key rotation). |
+| 1 (MVP) | `media` | FR-38, NFR-06 | `auth` | Reuses the `Page`/`PageSize` params from auth. Magic-byte validation, safe disk storage, thumbnails (5 s or less) and alt-text rules used by all content and PPID uploads. |
 | 2 (MVP) | `site` | FR-02, FR-03, FR-35, FR-37, FR-44 | `auth` | Layout shell: 3-level menu, single contact/social settings, WITA `visit_daily` footer counter and the WITA `holidays` table (used by `ppid`). |
 | 2 (MVP) | `applications` | FR-28, FR-37 | `auth`, `media` | 16 application cards with admin ordering. Parallel with `site` and `staff`. |
 | 2 (MVP) | `staff` | FR-07, FR-37 | `auth` | 241-row directory (search, division filter, sort, pagination) and admin CRUD. |
