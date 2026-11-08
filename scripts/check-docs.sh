@@ -19,4 +19,20 @@ if [ -f "$prd" ] && [ -f "$tr" ]; then
 else
   echo "docs-check: skipped traceability comparison (missing $prd or $tr)"
 fi
+
+# Every FR id in the PRD must appear in the roadmap and in the module index, and nothing else.
+if [ -f "$prd" ]; then
+  fr_ids="$(grep -oE '^\| FR-[0-9]+ \|' "$prd" | grep -oE 'FR-[0-9]+' | sort -u)"
+  for doc in docs/workflow/roadmap.md docs/modules/README.md; do
+    if [ ! -f "$doc" ]; then echo "docs-check: missing $doc"; fail=1; continue; fi
+    doc_ids="$(grep -oE '(^|[^A-Za-z])FR-[0-9]+' "$doc" | grep -oE 'FR-[0-9]+' | sort -u || true)"
+    if [ "$fr_ids" != "$doc_ids" ]; then
+      echo "FR ids in $doc differ from the PRD (< PRD, > $doc):"
+      diff <(echo "$fr_ids") <(echo "$doc_ids") || true
+      fail=1
+    else
+      echo "docs-check: $doc covers all $(echo "$fr_ids" | wc -l) FR ids"
+    fi
+  done
+fi
 exit "$fail"

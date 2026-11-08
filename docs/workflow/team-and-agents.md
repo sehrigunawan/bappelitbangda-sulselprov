@@ -33,7 +33,7 @@ How the two of us work in this repo, with and without AI coding agents. Agent ru
 
 ## Module loop
 
-A module is built contract first, then tests first. Skills `module-contract` and `module-tdd` (`.agents/skills/`) carry the detail; this table is the process.
+A module is built contract first, then tests first. Skills `module-contract` and `module-tdd` (`.agents/skills/`) carry the detail; this table is the process. Which module comes next, what it depends on and which open questions gate it: [`roadmap.md`](roadmap.md). The contract PR adds the module's line to [`../modules/README.md`](../modules/README.md) (status `contract`); lane PRs advance that status and fill `Status`, `Issue` and `Test` in [`../prd/traceability.md`](../prd/traceability.md).
 
 | Phase | Session and subagents | Isolation | Human gate |
 |---|---|---|---|
@@ -109,7 +109,7 @@ Rules are in `AGENTS.md`, `api/AGENTS.md` and `web/AGENTS.md`. Also: breaking AP
 
 ## Rhythm
 
-- Daily, 10 minutes: who holds the contract today, open tasks, blockers.
+- Daily, 10 minutes: who holds the contract today, open tasks, blockers, and whether the next module in `roadmap.md` is gated by an open `OQ-nn`.
 - Friday, 30 minutes: explain-back. Each of us walks the other through a module they did not write. This is how we avoid code nobody understands at handover. Update the runbook and `known-gaps.md`.
 - Weekly: close stale branches and worktrees. Once a week, write one small core piece by hand.
 
