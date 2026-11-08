@@ -1,6 +1,6 @@
 # Build from the REPO ROOT:  docker build -f api/Dockerfile --target api .   (or --target migrate)
 # Base images are pinned by digest; Dependabot (docker ecosystem) proposes updates.
-FROM golang:1.26.10-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308 AS build
+FROM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 COPY api/go.mod api/go.sum ./api/
