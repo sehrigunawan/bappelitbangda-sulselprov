@@ -17,6 +17,7 @@ err() { echo "ERROR: $1: $2; fix: $3"; fail=1; }
 # Handles single-line values and folded/literal blocks (key: > or key: |).
 frontmatter_field() {
   awk -v key="$2" '
+    { sub(/\r$/, "") }
     NR == 1 && $0 != "---" { exit }
     NR == 1 { next }
     $0 == "---" { exit }
@@ -43,7 +44,9 @@ for dir in "$skills"/*/; do
     continue
   fi
   want_link="../../$skills/$name"
-  if [ ! -L "$links/$name" ] || [ "$(readlink "$links/$name")" != "$want_link" ]; then
+  actual_link="$(readlink "$links/$name" 2>/dev/null || cat "$links/$name" 2>/dev/null || true)"
+  actual_link="${actual_link%$'\r'}"
+  if [ "$actual_link" != "$want_link" ]; then
     err "$links/$name" "missing or not a symlink to $want_link" "mkdir -p $links && ln -sfn $want_link $links/$name"
   fi
   fm_name="$(frontmatter_field "$file" name)"

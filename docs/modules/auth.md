@@ -335,21 +335,21 @@ Written before the BE and FE lanes start. Each lane PR fills the "Test name" col
 | A46 | `GET /api/v1/health` with an invalid or foreign session cookie gives 200 and makes no session query | `api` | `TestHealthSkipsSessions` |
 | A47 | `getUser`, `updateUser`, `createPasswordReset` and `deleteUserTotp` give 400 for `userId` `abc` and `0` | `api` | `TestUserIdValidation` |
 | A48 | Renewals after login (TOTP verification, step-up) keep the absolute lifetime: with AUTH_SESSION_LIFETIME=2s, a step-up at 1 s and a request at 2.5 s give 401 | `api` | `TestSessionTimeouts` |
-| W1 | The `(panel)` guard maps 401 to a redirect to `/admin/masuk?kembali=...`, and each pending stage to its page (injected fetch, fixtures typed from the contract examples) | `web-load` | |
-| W2 | A stage page with a mismatching stage redirects | `web-load` | |
-| W3 | `kembali` values `//evil`, `https://x` and `/publik` resolve to `/admin` | `web-load` | |
-| W4 | The login form shows the 401 and 429 messages (minutes from `Retry-After`) and navigates on 200 | `web-component` | |
-| W5 | Verification toggles to the recovery-code input | `web-component` | |
-| W6 | Enrollment renders the QR and manual key, then the recovery codes; continuing requires `Saya sudah menyimpan kode ini` | `web-component` | |
-| W7 | The nav shows `Beranda` and `Akun Saya` to every session and `Pengguna` only with `users.manage`; `/admin/pengguna` without it shows `Anda tidak memiliki akses ke halaman ini.` | `web-component` | |
-| W8 | The user list shows Indonesian role labels and pages | `web-component` | |
-| W9 | Create user shows the temporary password once | `web-component` | |
-| W10 | `StepUpDialog` opens before a reset when `stepUpExpiresAt` is null, calls `onverified` after success, and reopens on a 403 with the step-up detail | `web-component` | |
-| W11 | A 401 from a panel call redirects with `alasan=sesi-berakhir`; a 401 from `createSession`, `createTotpVerification` or `updatePassword` shows its inline message instead; a 401 from `deleteSession` counts as a successful logout | `web-component` | |
-| W12 | `formatDateTimeWita` formats the instant 2026-10-15T06:05:00Z as `Kamis, 15 Oktober 2026 14.05 WITA` (pure function, plain `*.spec.ts`) | `web-load` | |
-| W13 | The `akun` page changes the password, enrolls TOTP (QR, confirm, recovery codes once) and regenerates recovery codes through the step-up dialog | `web-component` | |
-| W14 | `pengguna/[id]` saves roles and the active flag, and resets password and TOTP through the step-up dialog; the temporary password is shown once | `web-component` | |
-| W15 | `Keluar` calls `deleteSession` and goes to `/admin/masuk`; after login a valid `kembali` is honoured | `web-component` | |
+| W1 | The `(panel)` guard maps 401 to a redirect to `/admin/masuk?kembali=...`, and each pending stage to its page (injected fetch, fixtures typed from the contract examples) | `web-load` | `guard.spec.ts` |
+| W2 | A stage page with a mismatching stage redirects | `web-load` | `stage.spec.ts` |
+| W3 | `kembali` values `//evil`, `https://x` and `/publik` resolve to `/admin` | `web-load` | `url.spec.ts` |
+| W4 | The login form shows the 401 and 429 messages (minutes from `Retry-After`) and navigates on 200 | `web-component` | `masuk.svelte.spec.ts` |
+| W5 | Verification toggles to the recovery-code input | `web-component` | `verifikasi.svelte.spec.ts` |
+| W6 | Enrollment renders the QR and manual key, then the recovery codes; continuing requires `Saya sudah menyimpan kode ini` | `web-component` | `autentikator.svelte.spec.ts` |
+| W7 | The nav shows `Beranda` and `Akun Saya` to every session and `Pengguna` only with `users.manage`; `/admin/pengguna` without it shows `Anda tidak memiliki akses ke halaman ini.` | `web-component` | `panel.svelte.spec.ts` |
+| W8 | The user list shows Indonesian role labels and pages | `web-component` | `pengguna.svelte.spec.ts` |
+| W9 | Create user shows the temporary password once | `web-component` | `baru.svelte.spec.ts` |
+| W10 | `StepUpDialog` opens before a reset when `stepUpExpiresAt` is null, calls `onverified` after success, and reopens on a 403 with the step-up detail | `web-component` | `StepUpDialog.svelte.spec.ts` |
+| W11 | A 401 from a panel call redirects with `alasan=sesi-berakhir`; a 401 from `createSession`, `createTotpVerification` or `updatePassword` shows its inline message instead; a 401 from `deleteSession` counts as a successful logout | `web-component` | `client.spec.ts` |
+| W12 | `formatDateTimeWita` formats the instant 2026-10-15T06:05:00Z as `Kamis, 15 Oktober 2026 14.05 WITA` (pure function, plain `*.spec.ts`) | `web-load` | `date.spec.ts` |
+| W13 | The `akun` page changes the password, enrolls TOTP (QR, confirm, recovery codes once) and regenerates recovery codes through the step-up dialog | `web-component` | `akun.svelte.spec.ts` |
+| W14 | `pengguna/[id]` saves roles and the active flag, and resets password and TOTP through the step-up dialog; the temporary password is shown once | `web-component` | `detail.svelte.spec.ts` |
+| W15 | `Keluar` calls `deleteSession` and goes to `/admin/masuk`; after login a valid `kembali` is honoured | `web-component` | `logout.svelte.spec.ts` |
 
 ### ASVS level 2 checklist map
 
