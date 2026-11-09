@@ -3,7 +3,7 @@
 	import type { components } from '#lib/api/schema.d.ts';
 	import RoleBadge from '#lib/admin/RoleBadge.svelte';
 	import { formatDateTimeWita } from '#lib/format/date.ts';
-
+	import { canManageUsers as checkCanManageUsers } from '#lib/admin/permissions.ts';
 	type SessionState = components['schemas']['SessionState'];
 	type UserPage = components['schemas']['UserPage'];
 
@@ -11,14 +11,18 @@
 		data: {
 			session?: SessionState;
 			userPage?: UserPage;
+			canManage?: boolean;
 		};
 	}
 
 	let { data }: Props = $props();
 
-	const session = $derived(data.session);
 	const canManageUsers = $derived(
-		session?.permissions?.some((p) => p.area === 'users' && p.level === 'manage') ?? false
+		data.canManage !== undefined
+			? data.canManage
+			: data.session
+				? checkCanManageUsers(data.session)
+				: true
 	);
 
 	const userPage = $derived(data.userPage);
@@ -84,25 +88,35 @@
 				</tbody>
 			</table>
 
-			<div class="pagination">
-				<a
-					href={resolve(
-						`/admin/(panel)/pengguna?halaman=${currentPage - 1}` as '/admin/(panel)/pengguna'
-					)}
-					class={`page-link ${currentPage <= 1 ? 'disabled' : ''}`}
-				>
-					Sebelumnya
-				</a>
-				<span class="page-info">Halaman {currentPage} dari {totalPages}</span>
-				<a
-					href={resolve(
-						`/admin/(panel)/pengguna?halaman=${currentPage + 1}` as '/admin/(panel)/pengguna'
-					)}
-					class={`page-link ${currentPage >= totalPages ? 'disabled' : ''}`}
-				>
-					Berikutnya
-				</a>
-			</div>
+			{#if total > 0}
+				<div class="pagination">
+					{#if currentPage <= 1}
+						<span aria-disabled="true" class="page-link disabled">Sebelumnya</span>
+					{:else}
+						<a
+							href={resolve(
+								`/admin/(panel)/pengguna?halaman=${currentPage - 1}` as '/admin/(panel)/pengguna'
+							)}
+							class="page-link"
+						>
+							Sebelumnya
+						</a>
+					{/if}
+					<span class="page-info">Halaman {currentPage} dari {totalPages}</span>
+					{#if currentPage >= totalPages}
+						<span aria-disabled="true" class="page-link disabled">Berikutnya</span>
+					{:else}
+						<a
+							href={resolve(
+								`/admin/(panel)/pengguna?halaman=${currentPage + 1}` as '/admin/(panel)/pengguna'
+							)}
+							class="page-link"
+						>
+							Berikutnya
+						</a>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</div>
 {/if}

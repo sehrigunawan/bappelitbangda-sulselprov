@@ -4,7 +4,7 @@
 	import { createApiClient } from '#lib/http/client.ts';
 	import type { components } from '#lib/api/schema.d.ts';
 	import { sanitizeKembaliUrl } from '#lib/admin/url.ts';
-
+	import { parseRetryAfterMinutes, problemDetail } from '#lib/admin/problem.ts';
 	type SessionState = components['schemas']['SessionState'];
 
 	interface Props {
@@ -53,7 +53,7 @@
 
 		try {
 			const client = createApiClient({ baseUrl: window.location.origin });
-			const { response } = await client.PUT('/api/v1/admin/auth/password', {
+			const { response, error } = await client.PUT('/api/v1/admin/auth/password', {
 				body: { currentPassword, newPassword }
 			});
 
@@ -70,10 +70,20 @@
 					await goto(target);
 				}
 			} else if (response.status === 400) {
-				const body = await response.json();
-				errorMessage = body.detail || 'Kata sandi saat ini salah.';
+				errorMessage = problemDetail(error, 'Kata sandi saat ini salah.');
+			} else if (response.status === 429) {
+				const minutes = parseRetryAfterMinutes(response);
+				errorMessage = `Terlalu banyak percobaan gagal. Coba lagi dalam ${minutes} menit.`;
+			} else if (response.status === 401) {
+				const sessionRes = await client.GET('/api/v1/admin/auth/session');
+				if (sessionRes.response.status === 401) {
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto('/admin/masuk?alasan=sesi-berakhir');
+					return;
+				}
+				errorMessage = problemDetail(error);
 			} else {
-				errorMessage = 'Terjadi kesalahan. Coba lagi.';
+				errorMessage = problemDetail(error);
 			}
 		} catch {
 			errorMessage = 'Terjadi kesalahan. Coba lagi.';
@@ -90,7 +100,7 @@
 		<div class="error-alert">{errorMessage}</div>
 	{/if}
 
-	<form onsubmit={handleSubmit}>
+	<form onsubmit={handleSubmit} novalidate>
 		<label>
 			Kata sandi saat ini
 			<input type="password" required bind:value={currentPassword} disabled={loading} />

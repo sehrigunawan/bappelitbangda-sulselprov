@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { sanitizeKembaliUrl } from '#lib/admin/url.ts';
 	import { createApiClient } from '#lib/http/client.ts';
@@ -31,7 +32,7 @@
 	let errorMessage = $state('');
 	let loading = $state(false);
 
-	$effect(() => {
+	onMount(() => {
 		if (!enrollment && !recoveryCodes) {
 			loadEnrollment();
 		}
@@ -43,6 +44,8 @@
 			const { data: enrollData, response } = await client.POST('/api/v1/admin/auth/totp');
 			if (response.ok && enrollData) {
 				fetchedEnrollment = enrollData;
+			} else {
+				errorMessage = 'Terjadi kesalahan. Coba lagi.';
 			}
 		} catch {
 			errorMessage = 'Terjadi kesalahan. Coba lagi.';
@@ -113,7 +116,7 @@
 					type="text"
 					name="code"
 					inputmode="numeric"
-					pattern="[0-9]{6}"
+					pattern={'[0-9]{6}'}
 					maxlength="6"
 					required
 					bind:value={code}

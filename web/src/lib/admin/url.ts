@@ -4,21 +4,20 @@
  * Rejects external URLs, protocol-relative URLs, and non-admin paths by returning '/admin'.
  */
 export function sanitizeKembaliUrl(url: string | null): string {
-	if (!url) {
+	if (!url || typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) {
 		return '/admin';
 	}
 
-	// Reject external, protocol-relative or non-admin URLs
-	if (url.startsWith('//') || url.includes('://')) {
+	try {
+		const parsed = new URL(url, 'http://localhost');
+		if (
+			parsed.pathname === '/admin' ||
+			(parsed.pathname.startsWith('/admin/') && !parsed.pathname.startsWith('/admin/masuk'))
+		) {
+			return parsed.pathname + parsed.search + parsed.hash;
+		}
+	} catch {
 		return '/admin';
-	}
-
-	if (url === '/admin') {
-		return '/admin';
-	}
-
-	if (url.startsWith('/admin/') && !url.startsWith('/admin/masuk')) {
-		return url;
 	}
 
 	return '/admin';

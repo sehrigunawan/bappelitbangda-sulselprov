@@ -1,8 +1,12 @@
 <script lang="ts">
-	import { createApiClient } from '#lib/http/client.ts';
+	/* eslint-disable svelte/no-navigation-without-resolve */
+	import { goto } from '$app/navigation';
+	import { panelClient } from '#lib/admin/panel-client.ts';
 	import type { components } from '#lib/api/schema.d.ts';
 	import StepUpDialog from '#lib/admin/StepUpDialog.svelte';
 	import RecoveryCodesPanel from '#lib/admin/RecoveryCodesPanel.svelte';
+	import { parseRetryAfterMinutes, problemDetail, isStepUpRequired } from '#lib/admin/problem.ts';
+	import { hasActiveStepUp } from '#lib/admin/permissions.ts';
 
 	type SessionState = components['schemas']['SessionState'];
 
@@ -66,8 +70,8 @@
 
 		passwordLoading = true;
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
-			const { response } = await client.PUT('/api/v1/admin/auth/password', {
+			const client = panelClient();
+			const { response, error } = await client.PUT('/api/v1/admin/auth/password', {
 				body: { currentPassword, newPassword }
 			});
 
@@ -77,10 +81,19 @@
 				newPassword = '';
 				confirmPassword = '';
 			} else if (response.status === 400) {
-				const body = await response.json();
-				passwordError = body.detail || 'Kata sandi saat ini salah.';
+				passwordError = problemDetail(error, 'Kata sandi saat ini salah.');
+			} else if (response.status === 429) {
+				const minutes = parseRetryAfterMinutes(response);
+				passwordError = `Terlalu banyak percobaan gagal. Coba lagi dalam ${minutes} menit.`;
+			} else if (response.status === 401) {
+				const sessionRes = await client.GET('/api/v1/admin/auth/session');
+				if (sessionRes.response.status === 401) {
+					await goto('/admin/masuk?alasan=sesi-berakhir');
+					return;
+				}
+				passwordError = problemDetail(error);
 			} else {
-				passwordError = 'Terjadi kesalahan. Coba lagi.';
+				passwordError = problemDetail(error);
 			}
 		} catch {
 			passwordError = 'Terjadi kesalahan. Coba lagi.';
@@ -95,7 +108,7 @@
 		totpLoading = true;
 
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
+			const client = panelClient();
 			const { data: enrollData, response } = await client.POST('/api/v1/admin/auth/totp');
 			if (response.ok && enrollData) {
 				enrollment = enrollData;
@@ -117,7 +130,7 @@
 		totpError = '';
 
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
+			const client = panelClient();
 			const { data: confirmData, response } = await client.PUT('/api/v1/admin/auth/totp', {
 				body: { code: enrollCode }
 			});
@@ -139,13 +152,8 @@
 		}
 	}
 
-	function hasActiveStepUp(): boolean {
-		const expiresAt = session?.stepUpExpiresAt;
-		return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now());
-	}
-
 	function requestRegenerateRecoveryCodes() {
-		if (hasActiveStepUp()) {
+		if (hasActiveStepUp(session)) {
 			executeRegenerateRecoveryCodes();
 		} else {
 			stepUpOpen = true;
@@ -158,17 +166,23 @@
 		totpError = '';
 
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
-			const { data: codesRes, response } = await client.POST(
-				'/api/v1/admin/auth/totp/recovery-codes'
-			);
+			const client = panelClient();
+			const {
+				data: codesRes,
+				response,
+				error
+			} = await client.POST('/api/v1/admin/auth/totp/recovery-codes');
 
 			if (response.ok && codesRes) {
 				newRecoveryCodes = codesRes.codes;
 			} else if (response.status === 403) {
-				stepUpOpen = true;
+				if (isStepUpRequired(error)) {
+					stepUpOpen = true;
+				} else {
+					totpError = 'Akses ditolak.';
+				}
 			} else {
-				totpError = 'Terjadi kesalahan. Coba lagi.';
+				totpError = problemDetail(error);
 			}
 		} catch {
 			totpError = 'Terjadi kesalahan. Coba lagi.';
@@ -263,7 +277,7 @@
 						<input
 							type="text"
 							inputmode="numeric"
-							pattern="[0-9]{6}"
+							pattern={'[0-9]{6}'}
 							maxlength="6"
 							required
 							bind:value={enrollCode}
@@ -307,7 +321,7 @@
 
 	<StepUpDialog
 		open={stepUpOpen}
-		client={createApiClient({ baseUrl: window.location.origin })}
+		client={panelClient()}
 		onverified={executeRegenerateRecoveryCodes}
 		oncancel={() => {
 			stepUpOpen = false;

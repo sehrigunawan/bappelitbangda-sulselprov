@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { createApiClient } from '#lib/http/client.ts';
+	import { panelClient } from '#lib/admin/panel-client.ts';
 	import type { components } from '#lib/api/schema.d.ts';
 	import StepUpDialog from '#lib/admin/StepUpDialog.svelte';
+	import { isStepUpRequired, problemDetail } from '#lib/admin/problem.ts';
+	import { canManageUsers, hasActiveStepUp } from '#lib/admin/permissions.ts';
 
 	type Role = components['schemas']['Role'];
 	type User = components['schemas']['User'];
@@ -11,6 +13,7 @@
 		data: {
 			user?: User;
 			session?: SessionState;
+			canManage?: boolean;
 		};
 		params: {
 			id: string;
@@ -21,6 +24,13 @@
 
 	const user = $derived(data.user);
 	const session = $derived(data.session);
+	const canManage = $derived(
+		data.canManage !== undefined
+			? data.canManage
+			: data.session
+				? canManageUsers(data.session)
+				: true
+	);
 	let fullName = $state('');
 	let selectedRoles = $state<Role[]>([]);
 	let active = $state(true);
@@ -67,7 +77,7 @@
 		errorMessage = '';
 
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
+			const client = panelClient();
 			const { data: updated, response } = await client.PUT('/api/v1/admin/auth/users/{userId}', {
 				params: { path: { userId: Number(params.id) } },
 				body: {
@@ -90,14 +100,9 @@
 			loading = false;
 		}
 	}
-	function hasActiveStepUp(): boolean {
-		const expiresAt = session?.stepUpExpiresAt;
-		return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now());
-	}
-
 	function requestResetPassword() {
 		pendingAction = 'password';
-		if (hasActiveStepUp()) {
+		if (hasActiveStepUp(session)) {
 			executeStepUpAction();
 		} else {
 			stepUpOpen = true;
@@ -106,50 +111,68 @@
 
 	function requestResetTotp() {
 		pendingAction = 'totp';
-		if (hasActiveStepUp()) {
+		if (hasActiveStepUp(session)) {
 			executeStepUpAction();
 		} else {
 			stepUpOpen = true;
 		}
 	}
+
 	async function executeStepUpAction() {
 		stepUpOpen = false;
 		loading = true;
 		errorMessage = '';
 		message = '';
 
-		const client = createApiClient({ baseUrl: window.location.origin });
+		const client = panelClient();
 
 		try {
 			if (pendingAction === 'password') {
-				const { data: res, response } = await client.POST(
-					'/api/v1/admin/auth/users/{userId}/password-reset',
-					{ params: { path: { userId: Number(params.id) } } }
-				);
+				const {
+					data: res,
+					response,
+					error
+				} = await client.POST('/api/v1/admin/auth/users/{userId}/password-reset', {
+					params: { path: { userId: Number(params.id) } }
+				});
 				if (response.ok && res) {
 					resetPasswordResult = res.temporaryPassword;
+					pendingAction = null;
 				} else if (response.status === 403) {
-					stepUpOpen = true;
+					if (isStepUpRequired(error)) {
+						stepUpOpen = true;
+						return;
+					}
+					errorMessage = 'Anda tidak memiliki akses ke halaman ini.';
+					pendingAction = null;
 				} else {
-					errorMessage = 'Terjadi kesalahan. Coba lagi.';
+					errorMessage = problemDetail(error);
+					pendingAction = null;
 				}
 			} else if (pendingAction === 'totp') {
-				const { response } = await client.DELETE('/api/v1/admin/auth/users/{userId}/totp', {
+				const { response, error } = await client.DELETE('/api/v1/admin/auth/users/{userId}/totp', {
 					params: { path: { userId: Number(params.id) } }
 				});
 				if (response.ok) {
 					message = 'Autentikator berhasil diatur ulang.';
+					pendingAction = null;
 				} else if (response.status === 403) {
-					stepUpOpen = true;
+					if (isStepUpRequired(error)) {
+						stepUpOpen = true;
+						return;
+					}
+					errorMessage = 'Anda tidak memiliki akses ke halaman ini.';
+					pendingAction = null;
 				} else {
-					errorMessage = 'Terjadi kesalahan. Coba lagi.';
+					errorMessage = problemDetail(error);
+					pendingAction = null;
 				}
 			}
 		} catch {
 			errorMessage = 'Terjadi kesalahan. Coba lagi.';
+			pendingAction = null;
 		} finally {
 			loading = false;
-			pendingAction = null;
 		}
 	}
 </script>
@@ -172,7 +195,9 @@
 		<div class="error-alert">{errorMessage}</div>
 	{/if}
 
-	{#if user}
+	{#if !canManage}
+		<p>Anda tidak memiliki akses ke halaman ini.</p>
+	{:else if user}
 		<div class="user-summary">
 			<h3>{user.fullName}</h3>
 			<span class="username-tag">@{user.username}</span>
@@ -243,7 +268,7 @@
 
 	<StepUpDialog
 		open={stepUpOpen}
-		client={createApiClient({ baseUrl: window.location.origin })}
+		client={panelClient()}
 		onverified={executeStepUpAction}
 		oncancel={() => {
 			stepUpOpen = false;

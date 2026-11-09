@@ -86,7 +86,7 @@
 					type="text"
 					name="code"
 					inputmode="numeric"
-					pattern="[0-9]{6}"
+					pattern={'[0-9]{6}'}
 					maxlength="6"
 					required
 					bind:value={code}

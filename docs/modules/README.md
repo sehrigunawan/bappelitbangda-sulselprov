@@ -6,7 +6,7 @@ Status: `not started` | `contract` | `in progress` | `done`. Requirements marked
 
 | Module | Wave | Spec | Requirements | Security lane | Status |
 |---|---|---|---|---|---|
-| `auth` | 1 | [auth.md](auth.md) | FR-33, NFR-05, NFR-17 | yes | done |
+| `auth` | 1 | [auth.md](auth.md) | FR-33, NFR-05, NFR-17 | yes | in progress |
 | `media` | 1 | (not written) | FR-38, NFR-06 | no | not started |
 | `site` | 2 | (not written) | FR-02, FR-03, FR-35, FR-37, FR-44; P3: FR-32 | no | not started |
 | `applications` | 2 | (not written) | FR-28, FR-37 | no | not started |

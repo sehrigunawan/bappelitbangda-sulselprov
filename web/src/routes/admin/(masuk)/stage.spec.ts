@@ -83,4 +83,17 @@ describe('stage pages mismatch guard (W2)', () => {
 			location: '/admin/masuk/verifikasi'
 		});
 	});
+
+	it('preserves kembali parameter across stage redirects', async () => {
+		const event = mockEvent<Parameters<typeof loadAutentikator>[0]>(
+			() => Response.json(fixtureSessionTotpRequired),
+			'/admin/masuk/autentikator?kembali=%2Fadmin%2Fpengguna'
+		);
+		await expect(async () => {
+			await loadAutentikator(event);
+		}).rejects.toMatchObject({
+			status: 307,
+			location: '/admin/masuk/verifikasi?kembali=%2Fadmin%2Fpengguna'
+		});
+	});
 });

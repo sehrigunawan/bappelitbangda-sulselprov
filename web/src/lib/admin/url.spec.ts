@@ -12,7 +12,8 @@ describe('sanitizeKembaliUrl (W3)', () => {
 		[null, '/admin'],
 		['/admin', '/admin'],
 		['/admin/pengguna', '/admin/pengguna'],
-		['/admin/pengguna?halaman=2', '/admin/pengguna?halaman=2']
+		['/admin/pengguna?halaman=2', '/admin/pengguna?halaman=2'],
+		['/admin/pengguna?redirect=https://example.com', '/admin/pengguna?redirect=https://example.com']
 	])('resolves %s to %s', (input, expected) => {
 		expect(sanitizeKembaliUrl(input)).toBe(expected);
 	});

@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { createApiClient } from '#lib/http/client.ts';
+	import { panelClient } from '#lib/admin/panel-client.ts';
 	import type { components } from '#lib/api/schema.d.ts';
 
 	type SessionState = components['schemas']['SessionState'];
@@ -23,7 +23,7 @@
 
 	async function handleLogout() {
 		try {
-			const client = createApiClient({ baseUrl: window.location.origin });
+			const client = panelClient();
 			await client.DELETE('/api/v1/admin/auth/session');
 		} finally {
 			await goto(resolve('/admin/(masuk)/masuk'));

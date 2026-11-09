@@ -10,9 +10,11 @@ export function handleStageRedirect(
 	session: SessionState | null,
 	kembaliUrl?: string | null
 ): void {
+	const kembaliParam = kembaliUrl ? `?kembali=${encodeURIComponent(kembaliUrl)}` : '';
+
 	if (!session) {
 		if (expectedStage !== 'unauthenticated') {
-			throw redirect(307, '/admin/masuk');
+			throw redirect(307, `/admin/masuk${kembaliParam}`);
 		}
 		return;
 	}
@@ -25,13 +27,13 @@ export function handleStageRedirect(
 	if (session.stage !== expectedStage) {
 		switch (session.stage) {
 			case 'totp_required':
-				throw redirect(307, '/admin/masuk/verifikasi');
+				throw redirect(307, `/admin/masuk/verifikasi${kembaliParam}`);
 			case 'password_change_required':
-				throw redirect(307, '/admin/masuk/kata-sandi');
+				throw redirect(307, `/admin/masuk/kata-sandi${kembaliParam}`);
 			case 'totp_enrollment_required':
-				throw redirect(307, '/admin/masuk/autentikator');
+				throw redirect(307, `/admin/masuk/autentikator${kembaliParam}`);
 			default:
-				throw redirect(307, '/admin/masuk');
+				throw redirect(307, `/admin/masuk${kembaliParam}`);
 		}
 	}
 }
